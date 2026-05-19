@@ -20,7 +20,8 @@ const HOME = homedir();
 const VESSEL_DATA_DIR_ENV = process.env.VESSEL_DATA_DIR ?? `${HOME}/.vessel`;
 
 const PATH_WHITELIST = [
-  '/Users/yongqian/Desktop/Vessel/',
+  '/Users/yongqian/dev/Vessel/',      // current repo location (moved out of iCloud-synced ~/Desktop)
+  '/Users/yongqian/Desktop/Vessel/',  // legacy location, kept so old traces still de-noise
   '/Users/yongqian/Desktop/claude-web/',
   '/tmp/',
   '/var/folders/',

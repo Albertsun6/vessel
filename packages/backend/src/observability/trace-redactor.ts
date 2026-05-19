@@ -5,7 +5,8 @@
  *   1) field-path blacklist (3a): mask values at specific JSON paths
  *   2) content-pattern blacklist (3b): regex over all remaining string values
  *
- * Path whitelist (4): exempts /Users/yongqian/Desktop/Vessel/, .../claude-web/, /tmp/, /var/folders/
+ * Path whitelist (5): exempts /Users/yongqian/dev/Vessel/ (current repo loc),
+ *   .../Desktop/Vessel/ (legacy), .../claude-web/, /tmp/, /var/folders/
  * from the absolute-path regex.
  *
  * 4KB spillover (5): caller (trace-writer) handles writing oversized payload to
@@ -54,7 +55,8 @@ const REDACTED_FIELD_SUFFIXES = [
 ];
 
 const PATH_WHITELIST = [
-  '/Users/yongqian/Desktop/Vessel/',
+  '/Users/yongqian/dev/Vessel/',      // current repo location (moved out of iCloud-synced ~/Desktop)
+  '/Users/yongqian/Desktop/Vessel/',  // legacy location, kept so old traces still de-noise
   '/Users/yongqian/Desktop/claude-web/',
   '/tmp/',
   '/var/folders/',
