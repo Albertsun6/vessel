@@ -1,0 +1,12 @@
+{
+  "type": "run_status",
+  "runId": "run-abc123",
+  "status": "running",
+  "sessionId": "sess-2026-05-20",
+  "pending": {
+    "kind": "permission",
+    "requestId": "req-perm-003",
+    "toolName": "Write",
+    "input": { "path": "/Users/test/project/x.ts" }
+  }
+}

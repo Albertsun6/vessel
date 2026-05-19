@@ -1,0 +1,7 @@
+{
+  "type": "reattach_run",
+  "runId": "run-abc123",
+  "conversationId": "conv-abc123",
+  "sessionId": "sess-2026-05-20",
+  "cwd": "/Users/test/project"
+}
