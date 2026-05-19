@@ -386,6 +386,16 @@ Steward 是**工作分发 + 跟踪 + 收尾**，不是万能工具。下列场�
 | `pnpm eva:hook` | worktree lifecycle | Steward 收线时调 `pre-remove` |
 | `lesson-store.ts` (memory.db) | 知识沉淀 | Phase 0 不写；Phase 1 收线时可选自动添加 |
 
+### Steward CLI（V0.6+，可选；Claude 也可代跑）
+
+| 命令 | 作用 |
+|---|---|
+| `pnpm steward:status` | 一条看 BACKLOG 摘要 + in_progress + spawn-done pending + 活 session |
+| `pnpm steward:validate` | lint `docs/BACKLOG.md` schema（CI 也跑） |
+| `pnpm steward:validate --mirror` | validate 通过后追加全量 snapshot 到 `~/.vessel/backlog-mirror.jsonl` |
+| `pnpm steward:mirror --record --id X --from planned --to in_progress` | status 变迁追加 mirror 行（Claude 改 BACKLOG 后应跑） |
+| `pnpm steward:mirror --show <id>` | 从 mirror 查某 task 最近快照 |
+
 ---
 
 ## 11 个不变量（I1-I11）快速参考

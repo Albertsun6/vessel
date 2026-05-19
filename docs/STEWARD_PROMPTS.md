@@ -320,7 +320,7 @@ Claude 跑命令前的归类（不必死记，看 Claude echo 时就懂）：
 | `开始干 <id>` 报错 "depends_on 未完成" | 先把前置项收掉，或者 `<id> unblock` 改强解锁 |
 | `开始干 <id>` 报错 "conflicts_with X in_progress" | 等 X 完成或开新窗口 |
 | `<id> 收线` 报错 "not in_progress" | 这一项还没开始；先 `开始干 <id>` |
-| YAML 解析坏了（罕见，R2） | 从 `~/.vessel/backlog-mirror.jsonl` 复原 |
+| YAML 解析坏了（罕见，R2） | `pnpm steward:mirror --show <id>` 或读 `~/.vessel/backlog-mirror.jsonl`；`pnpm steward:validate` 定位 schema 错误 |
 | 你忘了 task-id 怎么拼 | `看 backlog 推荐下一步`，列表里有 id |
 
 ---

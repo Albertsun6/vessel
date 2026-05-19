@@ -5,10 +5,11 @@
 //   pnpm eva:hook [--dry-run] [--verbose] [--yes] <hookName> <worktreeName>
 //
 // flags:
-//   --dry-run   只打印解析后命令，不执行（cross M4）
-//   --verbose   打印完整命令字符串（默认隐藏，cross M2 redact）
-//   --yes       高危 hook（含 rm -rf / pkill / killall / git worktree remove /
-//               git push --force / chown / chmod 的）必须显式 --yes 才执行
+//   --dry-run     只打印解析后命令，不执行（cross M4）
+//   --verbose     打印完整命令字符串（默认隐藏，cross M2 redact）
+//   --yes         高危 hook（含 rm -rf / pkill / killall / git worktree remove /
+//                 git push --force / chown / chmod 的）必须显式 --yes 才执行
+//   --no-env-sync 跳过 post-start 的 .env* 自动同步（P5）
 //
 // hookName: pre-start | post-start | post-merge | pre-remove
 // worktreeName: 对应 eva.json worktrees[].name 字段
@@ -18,14 +19,17 @@
 //   2. 取 entry.hooks[hookName] 命令
 //   3. pre-remove 允许 path 不存在（fall back to REPO_ROOT — cross m1 修），
 //      其他 hook 仍要求 path 存在
-//   4. 在 worktree path（或 REPO_ROOT for pre-remove）下用 `bash -c` 执行
-//   5. **curated env**（cross M3 修）：strip BASH_ENV / ENV / SHELLOPTS / CDPATH，
+//   4. **post-start 内置步骤（P4/P5，在用户 hook 命令之前运行）**：
+//      P4: 写 <worktree>/.vessel-task-id（供 vessel-stop-hook.sh 自动触发 signal-done）
+//      P5: 同步 REPO_ROOT 的 .env* 文件到 worktree 相同相对路径（--no-env-sync 跳过）
+//   5. 在 worktree path（或 REPO_ROOT for pre-remove）下用 `bash -c` 执行用户 hook
+//   6. **curated env**（cross M3 修）：strip BASH_ENV / ENV / SHELLOPTS / CDPATH，
 //      只透传白名单
-//   6. **redacted log**（cross M2 修）：默认隐藏 cmd 字面，--verbose 才打印；
+//   7. **redacted log**（cross M2 修）：默认隐藏 cmd 字面，--verbose 才打印；
 //      --verbose 也对 TOKEN/SECRET/PASSWORD/KEY 模式做 redact
-//   7. blocking 等结束，子进程退码即本进程退码
+//   8. blocking 等结束，子进程退码即本进程退码
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, copyFileSync, mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -71,12 +75,13 @@ function expandHome(p) {
 }
 
 function parseFlags(argv) {
-  const opts = { dryRun: false, verbose: false, yes: false };
+  const opts = { dryRun: false, verbose: false, yes: false, noEnvSync: false };
   const positional = [];
   for (const a of argv) {
     if (a === "--dry-run") opts.dryRun = true;
     else if (a === "--verbose") opts.verbose = true;
     else if (a === "--yes") opts.yes = true;
+    else if (a === "--no-env-sync") opts.noEnvSync = true;
     else if (a.startsWith("--")) fail(`unknown flag '${a}'`);
     else positional.push(a);
   }
@@ -158,10 +163,6 @@ if (!entry) {
 }
 
 const cmd = entry.hooks?.[hookName];
-if (!cmd) {
-  console.log(`[33m⚠[0m hook '${hookName}' not configured for '${worktreeName}' (no-op exit 0)`);
-  process.exit(0);
-}
 
 // Cross m1 修：pre-remove 允许 path 不存在（晚期 cleanup），fall back to REPO_ROOT
 const expandedPath = expandHome(entry.path);
@@ -173,6 +174,65 @@ if (!existsSync(expandedPath)) {
   } else {
     fail(`worktree path '${entry.path}' (resolved '${expandedPath}') does not exist. Run pre-start first.`, 3);
   }
+}
+
+// ── P4: post-start 内置步骤：写 .vessel-task-id ───────────────────────────
+if (hookName === "post-start" && cwd !== REPO_ROOT && !opts.dryRun) {
+  const taskIdFile = path.join(cwd, ".vessel-task-id");
+  const signalScript = path.join(REPO_ROOT, "scripts", "steward-signal-done.sh");
+  const payload = JSON.stringify({ task_id: entry.name, signal_script: signalScript });
+  try {
+    writeFileSync(taskIdFile, payload + "\n", "utf-8");
+    console.log(`[32m✓[0m wrote .vessel-task-id  (task=${entry.name})`);
+  } catch (err) {
+    console.warn(`[33m⚠[0m could not write .vessel-task-id: ${err.message}`);
+  }
+}
+
+// ── P5: post-start 内置步骤：同步 .env* 文件 ────────────────────────────────
+if (hookName === "post-start" && cwd !== REPO_ROOT && !opts.noEnvSync && !opts.dryRun) {
+  const synced = [];
+  const skipped = [];
+  function syncEnvFiles(dir) {
+    if (!existsSync(dir)) return;
+    for (const name of readdirSync(dir, { withFileTypes: true })) {
+      if (name.isDirectory()) {
+        const sub = path.join(dir, name.name);
+        if (name.name === "node_modules" || name.name === ".git") continue;
+        syncEnvFiles(sub);
+      } else if (/^\.env($|\.|_)/.test(name.name) || name.name === ".env") {
+        const rel = path.relative(REPO_ROOT, path.join(dir, name.name));
+        const src = path.join(REPO_ROOT, rel);
+        const dst = path.join(cwd, rel);
+        if (!existsSync(dst)) {
+          try {
+            mkdirSync(path.dirname(dst), { recursive: true });
+            copyFileSync(src, dst);
+            synced.push(rel);
+          } catch (err) {
+            console.warn(`[33m⚠[0m env-sync: could not copy ${rel}: ${err.message}`);
+          }
+        } else {
+          skipped.push(rel);
+        }
+      }
+    }
+  }
+  syncEnvFiles(REPO_ROOT);
+  if (synced.length > 0) {
+    console.log(`[32m✓[0m env-sync: copied ${synced.length} file(s): ${synced.join(", ")}`);
+  }
+  if (skipped.length > 0) {
+    console.log(`[37m  env-sync: ${skipped.length} already exist (skipped): ${skipped.join(", ")}[0m`);
+  }
+  if (synced.length === 0 && skipped.length === 0) {
+    console.log(`[37m  env-sync: no .env* files found in repo root[0m`);
+  }
+}
+
+if (!cmd) {
+  console.log(`[33m⚠[0m hook '${hookName}' not configured for '${worktreeName}' (no user-defined command)`);
+  process.exit(0);
 }
 
 // Cross M4 修：高危 hook 检查 + dry-run 出口

@@ -1,6 +1,6 @@
 # Vessel Backlog
 
-**最近更新**: 2026-05-19T09:00:00Z
+**最近更新**: 2026-05-19T18:00:00Z
 **Steward 启动仪式**: 见 [`docs/STEWARD_PROMPTS.md`](STEWARD_PROMPTS.md) 或 [`docs/STEWARD_USAGE.md`](STEWARD_USAGE.md)
 **Schema 契约**: [`docs/adr/vessel/ADR-019-steward-v0-contract.md`](adr/vessel/ADR-019-steward-v0-contract.md)
 **Source-of-truth**: 本文件是唯一写入点（I1）；`status` 字段是状态唯一权威（I10）；section header 仅人眼导航
@@ -182,4 +182,11 @@ items:
     completed_at: 2026-05-15T00:00:00Z
     refs: ["adr:024", "repo:github.com/Albertsun6/vessel-aisep"]
     note: "git filter-repo 保留 48 commits + aisep-protocol@0.3.0 tag。vessel 主线删 6 个包 + 30 份 doc/review/proposal + ADR-022 + 主线引用。长期归宿：等 vessel 基本完善后作为 Capability 装回 VesselCore。AISEP backlog 后续在 vessel-aisep 自管。"
+
+  - id: steward-v06-contract-debt
+    title: Steward V0.6 契约债 — mirror + validate + status 三件套
+    status: done
+    completed_at: 2026-05-19T18:00:00Z
+    refs: ["ci:.github/workflows/ci.yml"]
+    note: "scripts/lib/steward-backlog.mjs + steward-mirror.mjs + steward-validate.mjs + steward-status.mjs；pnpm steward:{validate,mirror,status}；CI steward:validate gate。待办：eva:reconcile worktree 漂移 (P1)"
 ```
