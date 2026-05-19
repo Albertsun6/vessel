@@ -16,6 +16,9 @@
     "eva:hook": "node scripts/eva-hook.mjs",
     "eva:sessions": "node scripts/eva-sessions.mjs",
     "eva:collect": "node scripts/eva-collect.mjs",
+    "eva:gen-port": "node scripts/eva-gen-port.mjs",
+    "eva:conflict-check": "node scripts/eva-conflict-check.mjs",
+    "eva:worker-status": "node scripts/eva-worker-status.mjs",
     "migrate:eva-to-vessel": "pnpm --filter @vessel/backend exec tsx ../../scripts/migrate-eva-to-vessel.ts",
     "import:debate-log": "pnpm --filter @vessel/backend exec tsx ../../scripts/import-debate-log.ts"
   },
