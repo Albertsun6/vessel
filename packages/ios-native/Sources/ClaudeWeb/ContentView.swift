@@ -184,6 +184,16 @@ struct ContentView: View {
             }
             .presentationDetents([.medium])
         }
+        // ADR-023 Phase C: render a paused Vessel workflow's HITL choice.
+        .sheet(item: Binding(
+            get: { client.pendingWorkflowChoice },
+            set: { _ in /* dismissed by resumeWorkflow */ }
+        )) { choice in
+            WorkflowChoiceSheet(choice: choice) { option in
+                client.resumeWorkflow(choice, option: option)
+            }
+            .presentationDetents([.medium])
+        }
         .sheet(isPresented: Binding(
             get: { client.currentPendingGitGate != nil },
             set: { newValue in
