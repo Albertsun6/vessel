@@ -27,6 +27,7 @@
     "test:harness-ci": "pnpm test:harness-schema && pnpm test:scheduler-cleanup && pnpm test:scheduler-failed-reasons && pnpm test:e2e-pipeline && pnpm test:e2e-failures",
     "test:inbox-concurrent": "tsx src/test-inbox-concurrent.ts",
     "test:workflow": "tsx src/test-workflow.ts",
+    "test:adr023": "tsx src/test-adr023-reattach.ts",
     "test:m1bplus": "tsx src/test-m1bplus.ts",
     "test:soul": "tsx src/test-soul.ts",
     "test:m2-ios-alpha": "tsx src/test-m2-ios-alpha.ts",
