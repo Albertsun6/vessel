@@ -1019,6 +1019,45 @@ CREATE INDEX idx_stage_running ON stage(status) WHERE status = 'running';
     `Loop 7a smoke: startConfigWatcher + closeConfigWatcher both idempotent + non-throwing`,
   );
 
+  // === Phase 9: iCloud conflict-copy migration guard
+  // backlog: pim-icloud-conflict-migration-pollution. ~/Desktop is iCloud-
+  // synced → iCloud drops conflict copies like `0001_initial 2.sql`. The old
+  // `^\d{4}_.*\.sql$` let `.*` swallow the space so the bogus copy ran →
+  // user_version drift → this test used to fail in the wild. Guard = strict
+  // `^\d{4}_[a-z0-9_]+\.sql$`. Regression: plant conflict copies, assert
+  // ONLY the real migration applies and user_version does NOT drift.
+  console.log("\n--- Phase 9: iCloud conflict-copy migration guard ---");
+  const icMig = join(tmp, "icloud-migrations");
+  rmSync(icMig, { recursive: true, force: true });
+  mkdirSync(icMig, { recursive: true });
+  copyFileSync(join(MIGRATIONS_DIR, "0001_initial.sql"), join(icMig, "0001_initial.sql"));
+  // iCloud ` 2` conflict copies — MUST be ignored:
+  copyFileSync(join(MIGRATIONS_DIR, "0001_initial.sql"), join(icMig, "0001_initial 2.sql"));
+  writeFileSync(
+    join(icMig, "0009_bogus 2.sql"),
+    "-- TARGET_VERSION = 999\nCREATE TABLE evil_drift (x);\n",
+  );
+  const icHandle = openHarnessDb({ dbPath: join(tmp, "icloud-guard.db"), migrationsDir: icMig });
+  const appliedIc = icHandle.db
+    .prepare("SELECT file FROM schema_migrations")
+    .all()
+    .map((r: any) => r.file as string);
+  const icVer = icHandle.schemaVersion;
+  icHandle.close();
+  assert(appliedIc.includes("0001_initial.sql"), "Phase 9: real 0001_initial.sql applied");
+  assert(
+    !appliedIc.some((f) => f.includes(" ")),
+    `Phase 9: NO space-named (iCloud conflict) migration applied (got ${JSON.stringify(appliedIc)})`,
+  );
+  assert(
+    !appliedIc.includes("0009_bogus 2.sql"),
+    "Phase 9: bogus '0009_bogus 2.sql' conflict copy NOT applied",
+  );
+  assert(
+    icVer === 100,
+    `Phase 9: user_version=100 (only real 0001), NOT drifted to 999 by conflict copy (got ${icVer})`,
+  );
+
   console.log("\nharness schema OK ✅");
 } finally {
   rmSync(tmp, { recursive: true, force: true });
