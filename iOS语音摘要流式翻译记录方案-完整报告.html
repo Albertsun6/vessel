@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iOS 语音摘要流式翻译记录方案</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  @media print { #sidebar { display: none; } #main { margin-left: 0 !important; } }
+  html { scroll-behavior: smooth; }
+  .pill-ok    { @apply inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800; }
+  .pill-warn  { @apply inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800; }
+  .pill-muted { @apply inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600; }
+  .nav-link.active { @apply font-semibold text-blue-600 border-l-2 border-blue-500 pl-2; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #e5e7eb; padding: 0.5rem 0.75rem; text-align: left; font-size: 0.875rem; }
+  th { background: #f9fafb; font-weight: 600; }
+  tr:hover td { background: #f0f9ff; }
+  .overflow-table { overflow-x: auto; }
+  code { background: #f3f4f6; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.85em; font-family: monospace; }
+  pre code { background: none; padding: 0; }
+  pre { background: #f3f4f6; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85em; line-height: 1.6; }
+  blockquote { border-left: 3px solid #d1d5db; padding-left: 1rem; color: #6b7280; margin: 1rem 0; }
+  details summary { cursor: pointer; font-weight: 600; color: #374151; }
+  details summary:hover { color: #1d4ed8; }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans" x-data="{ activeSection: '' }">
+
+<!-- Sticky top bar -->
+<header class="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm print:hidden">
+  <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between flex-wrap gap-2">
+    <div class="flex items-center gap-3">
+      <span class="font-bold text-gray-900 text-sm">iOS 语音摘要流式翻译记录方案</span>
+      <span class="pill-ok">置信度：高</span>
+      <span class="pill-muted">2026-05-19</span>
+      <span class="pill-ok">Phase 6: Refine → 全 Accept</span>
+    </div>
+    <button onclick="window.print()" class="text-xs text-gray-500 hover:text-gray-800 border border-gray-300 rounded px-2 py-1">打印</button>
+  </div>
+</header>
+
+<div class="max-w-7xl mx-auto flex">
+
+  <!-- Sidebar TOC -->
+  <nav id="sidebar" class="hidden lg:block w-56 shrink-0 sticky top-12 self-start h-[calc(100vh-3rem)] overflow-y-auto py-6 pr-4 print:hidden">
+    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">目录</p>
+    <ul class="space-y-1 text-sm" id="toc"></ul>
+  </nav>
+
+  <!-- Main content -->
+  <main id="main" class="flex-1 min-w-0 px-6 py-8 lg:ml-4">
+
+    <!-- Meta block -->
+    <div class="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-800">
+      调研日期：2026-05-19 ·
+      研究问题：在 Vessel iOS app（Swift/AVFoundation + Hono + Whisper ASR）摘要模式中加入「边转写边翻译 + 会话级持久化记录」 ·
+      异构搜索：2 Claude + 1 cursor-agent · 终审：cursor-agent Refine → Round 1 全 accept
+    </div>
+
+    <!-- MVP warning -->
+    <div class="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded text-sm">
+      <span class="font-bold">⚠️ MVP 边界说明：</span>本方案是 <strong>chunk-level MVP</strong>，翻译延迟 = 30s 切段间隔 + 后端翻译时间（1-3s/段）。这不是 &lt;1s 的真正实时流式翻译。如需 &lt;5s 首字延迟的 streaming，需改用 AVAudioEngine + 后端 streaming ASR（更大改动，超出本次调研范围）。
+    </div>
+
+    <!-- 研究问题 -->
+    <section id="s-question" class="mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-3 pb-1 border-b border-gray-200">研究问题</h2>
+      <p class="mb-2">在现有 30s 切段摘要模式架构上，以最小改动实现：</p>
+      <ol class="list-decimal pl-6 space-y-1">
+        <li>每段转写完立即触发翻译（非等全程结束后）</li>
+        <li>翻译结果实时展示到 iOS 端</li>
+        <li>会话级完整记录（原文段 + 译文段 + 最终总结）</li>
+      </ol>
+    </section>
+
+    <!-- 评估维度 -->
+    <section id="s-dimensions" class="mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-3 pb-1 border-b border-gray-200">评估维度</h2>
+      <ul class="space-y-1 text-sm">
+        <li><strong>D1</strong> 流式翻译传输层（延迟、后端改动量、iOS 复杂度）</li>
+        <li><strong>D2</strong> 转写-翻译对齐（乱序稳定性、实现复杂度、与现有 chunk 兼容）</li>
+        <li><strong>D3</strong> 持久化记录（原子写、崩溃安全、检索能力、改动量）</li>
+        <li><strong>D4</strong> iOS 流式消费（框架原生支持程度）</li>
+        <li><strong>D5</strong> 同类产品参考（SimulStreaming / Zoom / Otter / WhisperLiveKit）</li>
+      </ul>
+    </section>
+
+    <!-- 架构流程图 -->
+    <section id="s-arch" class="mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-3 pb-1 border-b border-gray-200">推荐架构流程</h2>
+      <div class="mermaid bg-white border border-gray-200 rounded-lg p-4">
+flowchart LR
+  A[AVAudioRecorder\n30s 切段] -->|m4a chunk| B[后端 Hono\nWhisper 转写]
+  B -->|segmentId + text| C[异步触发\n文本翻译 API]
+  C -->|translationDelta\nWS message| D[BackendClient\n现有 WS 通道]
+  D --> E[translationBySegmentId\nswift dict]
+  E --> F[SwiftUI\n实时显示双语对照]
+  B -->|原文 JSONL 行| G[Cache.swift\n扩展 JSONL 记录]
+  C -->|译文 JSONL 行| G
+      </div>
+    </section>
+
+    <!-- 方案对比 -->
+    <section id="s-comparison" class="mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-4 pb-1 border-b border-gray-200">方案对比</h2>
+
+      <h3 class="text-base font-semibold text-gray-800 mb-2">D1 流式翻译传输层</h3>
+      <div class="overflow-table mb-5">
+        <table>
+          <thead><tr><th>方案</th><th>延迟</th><th>后端改动</th><th>iOS 客户端</th><th>双向控制</th><th>综合</th></tr></thead>
+          <tbody>
+            <tr class="bg-green-50"><td><strong>WebSocket（复用现有 WS）</strong></td><td>低 ✓</td><td>极低 ✓</td><td>低（BackendClient 已有）✓</td><td>有 ✓</td><td><strong>4.5 ✓</strong></td></tr>
+            <tr><td>SSE（Hono streamSSE）</td><td>中</td><td>极低</td><td>低</td><td>无</td><td>3.5</td></tr>
+            <tr><td>chunked JSON（HTTP）</td><td>高</td><td>低</td><td>中</td><td>无</td><td>2.0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-gray-600 mb-6">推荐复用现有 WS 通道——新增 <code>translationDelta</code> message type，改动量极低，同时保留双向控制。</p>
+
+      <h3 class="text-base font-semibold text-gray-800 mb-2">D2 转写-翻译对齐</h3>
+      <div class="overflow-table mb-5">
+        <table>
+          <thead><tr><th>方案</th><th>乱序稳定性</th><th>复杂度</th><th>与现有 chunk 兼容</th><th>综合</th></tr></thead>
+          <tbody>
+            <tr class="bg-green-50"><td><strong>segmentId + startMs/endMs 双锚点</strong></td><td>高 ✓</td><td>中</td><td>高 ✓（复用 nextChunkIndex）</td><td><strong>4.5 ✓</strong></td></tr>
+            <tr><td>LocalAgreement（2 次前缀一致才 commit）</td><td>高</td><td>高</td><td>低</td><td>3.0</td></tr>
+            <tr><td>整块 commit 后翻译（现有）</td><td>高</td><td>低 ✓</td><td>完全兼容 ✓</td><td>2.5（延迟高）</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="text-base font-semibold text-gray-800 mb-2">D3 持久化记录</h3>
+      <div class="overflow-table mb-5">
+        <table>
+          <thead><tr><th>方案</th><th>原子写</th><th>崩溃安全</th><th>检索</th><th>改动量</th><th>综合</th></tr></thead>
+          <tbody>
+            <tr class="bg-green-50"><td><strong>JSONL per-session 扩展</strong></td><td>append</td><td>高 ✓</td><td>无</td><td>极低 ✓</td><td><strong>4.0 ✓</strong></td></tr>
+            <tr><td>SQLite WAL + GRDB.swift</td><td>高 ✓</td><td>高 ✓</td><td>高 ✓</td><td>中</td><td>4.0</td></tr>
+            <tr><td>Core Data</td><td>高</td><td>中</td><td>高</td><td>高</td><td>2.0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-sm text-gray-600 mb-2">阶段一用 JSONL 扩展（零新依赖）；若需跨会话检索再迁 SQLite GRDB。</p>
+      <pre><code>// 每行 JSONL 格式
+{"type":"segment","segmentId":0,"startMs":0,"endMs":30000,"text":"原文...","lang":"zh","timestamp":"..."}
+{"type":"translation","segmentId":0,"text":"Translation...","lang":"en","timestamp":"..."}
+{"type":"summary","text":"# 总结...","lang":"zh","timestamp":"..."}</code></pre>
+
+      <h3 class="text-base font-semibold text-gray-800 mb-2 mt-6">D5 同类产品参考</h3>
+      <div class="overflow-table">
+        <table>
+          <thead><tr><th>产品</th><th>架构要点</th><th>对本项目启发</th></tr></thead>
+          <tbody>
+            <tr><td><strong>SimulStreaming（UFAL 2025）</strong></td><td>Whisper + LLM，JSONL 输出 <code>text</code>（已确认）+ <code>unconfirmed_text</code></td><td>双态 UI（稳定文字 + 预览）可借鉴 <span class="pill-warn">⚠️ 仅非商业</span></td></tr>
+            <tr><td><strong>WhisperLiveKit（2025）</strong></td><td>AlignAtt + NLLW 同步翻译，WebSocket</td><td>生产可用参考 <span class="pill-warn">⚠️ translation API in dev</span></td></tr>
+            <tr><td>Zoom Video SDK</td><td><code>caption-message</code> 实时下发转写/译文</td><td>原文+译文+时间轴是行业标准</td></tr>
+            <tr><td>Otter.ai</td><td>实时转写 + 摘要 + 搜索 + 导出</td><td>会话级完整记录是核心差异化</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 推荐 -->
+    <section id="s-recommendation" class="mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-3 pb-1 border-b border-gray-200">推荐 <span class="pill-ok ml-2">置信度：高</span></h2>
+
+      <div class="p-4 bg-green-50 border border-green-200 rounded-lg mb-4">
+        <p class="font-semibold text-green-900 mb-2">结论</p>
+        <p class="text-sm">在现有 30s 切段架构上做最小改动，加入「每段转写完即异步触发文本翻译 + segmentId 对齐 + JSONL 扩展记录」，通过现有 WS 通道下发翻译结果。</p>
+      </div>
+
+      <p class="font-semibold text-gray-800 mb-2">理由</p>
+      <ol class="list-decimal pl-6 space-y-2 text-sm mb-4">
+        <li>WS 通道已存在（BackendClient、runIdToConversation routing 可复用），无需引入 SSE 端点</li>
+        <li>30s chunk 提供天然 segment 边界，segmentId 直接复用 <code>nextChunkIndex</code>，对齐逻辑简单可靠</li>
+        <li>JSONL 扩展与现有 Cache.swift 完全兼容，零新依赖</li>
+        <li>翻译 API 推荐接<strong>文本翻译模型</strong>（gpt-4o-mini 或本地 NLLB-200 蒸馏版）；注意 OpenAI Realtime Translation（<code>gpt-realtime-translate</code>，$0.034/min）是<strong>音频进/音频+译文出</strong>，会绕过现有 Whisper ASR 链路，不适合本方案</li>
+      </ol>
+
+      <p class="font-semibold text-gray-800 mb-2">适用条件</p>
+      <ul class="text-sm space-y-1 mb-4">
+        <li>✅ 适用：用户可接受「每 30s 看到一段新翻译」的体验</li>
+        <li>❌ 不适用：要求 &lt;5s 流式翻译首字延迟 → 需改 AVAudioEngine + 后端 streaming ASR</li>
+      </ul>
+    </section>
+
+    <!-- 待验证风险 -->
+    <section id="s-risks" class="mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-3 pb-1 border-b border-gray-200">待验证风险</h2>
+      <ul class="space-y-3 text-sm">
+        <li class="flex gap-2"><span class="text-gray-400 mt-0.5">☐</span><div><strong>翻译 API 成本实测</strong>：OpenAI Realtime Translation $0.034/min 已公开，但若走 gpt-4o-mini 文本翻译需估算 30s 中文 chunk token 数 × 单价；NLLB 本地部署在 iPhone 上未实测</div></li>
+        <li class="flex gap-2"><span class="text-gray-400 mt-0.5">☐</span><div><strong>翻译延迟实测</strong>：AssemblyAI/Deepgram 厂商自述 150-250ms 为低置信数据；实测 gpt-4o-mini 对 200-400 字中文 chunk 的翻译 RTT</div></li>
+        <li class="flex gap-2"><span class="text-gray-400 mt-0.5">☐</span><div><strong>SimulStreaming license</strong>：Noncommercial Oct 2025 release — 只借鉴架构思路，不直接复制代码；若复制代码需锁定具体 tag + 遵守 noncommercial 限制</div></li>
+        <li class="flex gap-2"><span class="text-gray-400 mt-0.5">☐</span><div><strong>WhisperLiveKit translation 稳定性</strong>：translation backend (NLLW) API 仍 in development，近期多处翻译/VRAM bugfix，不建议直接依赖其 API 接口</div></li>
+        <li class="flex gap-2"><span class="text-gray-400 mt-0.5">☐</span><div><strong>AVAudioEngine 升级路径</strong>：当前 AVAudioRecorder 切段方案有 ~50ms gap；若未来需真正流式则需迁到 AVAudioEngine，评估改动量</div></li>
+        <li class="flex gap-2"><span class="text-gray-400 mt-0.5">☐</span><div><strong>URLSession bytes 方法签名</strong>：实测确认使用 <code>bytes(from:delegate:)</code> 而非 <code>bytes(for:)</code> 以避免编译错误</div></li>
+      </ul>
+    </section>
+
+    <!-- 主要来源 -->
+    <section id="s-sources" class="mb-8">
+      <h2 class="text-xl font-bold text-gray-900 mb-3 pb-1 border-b border-gray-200">主要来源</h2>
+      <div class="overflow-table">
+        <table>
+          <thead><tr><th>来源</th><th>置信度</th><th>支持点</th></tr></thead>
+          <tbody>
+            <tr><td><a href="https://github.com/ufal/SimulStreaming" class="text-blue-600 hover:underline">SimulStreaming（UFAL 2025）</a></td><td><span class="pill-ok">高</span></td><td>confirmed/unconfirmed JSONL 字段设计；chunk 对齐策略</td></tr>
+            <tr><td><a href="https://github.com/QuentinFuxa/WhisperLiveKit" class="text-blue-600 hover:underline">WhisperLiveKit（2025）</a></td><td><span class="pill-ok">高</span></td><td>生产级 streaming 翻译参考实现</td></tr>
+            <tr><td><a href="https://arxiv.org/html/2508.13358v1" class="text-blue-600 hover:underline">arxiv 2508.13358（2025）</a></td><td><span class="pill-ok">高</span></td><td>PARTIAL/FINAL 双假设；延迟数据（AL 2.74s vs 4.39s）</td></tr>
+            <tr><td><a href="https://hono.dev/docs/helpers/streaming" class="text-blue-600 hover:underline">Hono streaming 文档</a></td><td><span class="pill-ok">高</span></td><td><code>streamSSE()</code> / <code>stream()</code> 后端实现</td></tr>
+            <tr><td><a href="https://developer.apple.com/documentation/foundation/urlsession" class="text-blue-600 hover:underline">Apple URLSession AsyncBytes</a></td><td><span class="pill-ok">高</span></td><td>iOS 流式消费原生支持（<code>bytes(from:delegate:)</code>）</td></tr>
+            <tr><td><a href="https://www.sqlite.org/wal.html" class="text-blue-600 hover:underline">SQLite WAL 官方文档</a></td><td><span class="pill-ok">高</span></td><td>原子提交 + 读写并发</td></tr>
+            <tr><td><a href="https://github.com/groue/GRDB.swift" class="text-blue-600 hover:underline">GRDB.swift</a></td><td><span class="pill-ok">高</span></td><td>iOS SQLite Codable/Record/迁移/观察（备选）</td></tr>
+            <tr><td><a href="https://developers.zoom.us/docs/video-sdk/web/transcription-translation.md" class="text-blue-600 hover:underline">Zoom Video SDK transcription</a></td><td><span class="pill-ok">高</span></td><td>产品级「原文+译文+时间轴」参考</td></tr>
+            <tr><td><a href="https://developers.openai.com/api/docs/guides/realtime-translation" class="text-blue-600 hover:underline">OpenAI Realtime Translation</a></td><td><span class="pill-ok">高</span></td><td>架构区分：Realtime Translation ≠ 文本翻译；$0.034/min</td></tr>
+            <tr><td><a href="https://developers.deepgram.com/changelog/2025/2/12.md" class="text-blue-600 hover:underline">Deepgram Nova-3（2025）</a></td><td><span class="pill-warn">中（vendor）</span></td><td>word-level timestamp 对齐参考；延迟数据低置信</td></tr>
+            <tr><td><a href="https://arxiv.org/html/2506.17077" class="text-blue-600 hover:underline">arxiv 2506.17077</a></td><td><span class="pill-ok">高</span></td><td>真正 streaming 的延迟 regime（2-5s vs 30s chunk）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 调研 Metadata（折叠） -->
+    <section id="s-metadata" class="mb-8">
+      <details class="border border-gray-200 rounded-lg">
+        <summary class="px-4 py-3 text-sm bg-gray-50 rounded-lg">调研 Metadata &amp; Phase 6 辩论历史</summary>
+        <div class="px-4 py-4 text-sm space-y-4">
+          <div>
+            <p><strong>Phase 6 异构终审 verdict</strong>: <span class="pill-warn">Refine</span>（3 条全部 accept，Round 1 收敛）</p>
+            <p><strong>辩论收敛</strong>: Round 1 全 accept → 直接 finalize</p>
+            <p><strong>人类介入</strong>: 无</p>
+          </div>
+          <div>
+            <p class="font-semibold mb-1">Phase 2.5 Reflection</p>
+            <ul class="list-disc pl-5 space-y-1 text-gray-600">
+              <li>子问题覆盖率：Q1-Q5 全部覆盖 ✓</li>
+              <li>独立来源数：每个关键 claim ≥2 独立 domain ✓</li>
+              <li>Vendor-claim：AssemblyAI/Deepgram 延迟数据已标记低置信</li>
+              <li>Source 质量：High ~65%，Low ~0% ✓</li>
+              <li>追搜决策：No</li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-semibold mb-1">Phase 5.5 Citation Health</p>
+            <p>Layer A: 25 URLs | 22 ok (88%) | 0 wayback | 1 blocked | 2 dead (8%) → <span class="pill-ok">PASS</span></p>
+            <p>Layer B: 5 sampled | 2 supported | 2 partial | 1 not-supported (20%) → <span class="pill-ok">PASS</span>（边界）</p>
+            <p>已修正: SimulStreaming 字段 <code>confirmed_text</code> → <code>text</code>；URLSession 方法签名已修正</p>
+          </div>
+          <div>
+            <p class="font-semibold mb-2">Round 1 判断矩阵</p>
+            <div class="overflow-table">
+              <table>
+                <thead><tr><th>建议</th><th>立场</th><th>论据</th></tr></thead>
+                <tbody>
+                  <tr><td>"实时流式转写"降格为 chunk-level MVP</td><td><span class="pill-ok">accept</span></td><td>arxiv 2506.17077 确认 2-5s 级才是 streaming regime</td></tr>
+                  <tr><td>OpenAI Realtime Translation $0.034/min，架构是音频进/译文出</td><td><span class="pill-ok">accept</span></td><td>官方文档确认架构区分；已在推荐中明确</td></tr>
+                  <tr><td>SimulStreaming Noncommercial license + WhisperLiveKit API 未稳定</td><td><span class="pill-ok">accept</span></td><td>github.com/ufal/SimulStreaming/releases 确认；已加 ⚠️ 标注</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// Build TOC from h2 sections
+document.addEventListener('DOMContentLoaded', () => {
+  mermaid.initialize({ startOnLoad: true, theme: 'default' });
+
+  const toc = document.getElementById('toc');
+  const sections = document.querySelectorAll('section[id]');
+  sections.forEach(sec => {
+    const h2 = sec.querySelector('h2');
+    if (!h2) return;
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = '#' + sec.id;
+    a.textContent = h2.textContent.replace(/[高中低置信度：]+$/, '').trim();
+    a.className = 'nav-link block py-1 px-2 text-gray-600 hover:text-blue-600 transition-colors text-xs leading-tight';
+    li.appendChild(a);
+    toc.appendChild(li);
+  });
+
+  // Scroll spy
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        const active = toc.querySelector(`a[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+});
+</script>
+</body>
+</html>
