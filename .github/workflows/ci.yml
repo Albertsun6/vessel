@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Steward BACKLOG schema lint
+        run: pnpm steward:validate
+
       - name: Protocol fixture tests
         run: pnpm test:protocol
 
