@@ -2,6 +2,12 @@ import type { AsrClient, TranscribeOptions } from "./types.js";
 
 const GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
 
+// Full whisper-large-v3 — highest Chinese accuracy; Groq runs it fast enough
+// that the ~0.3s vs turbo difference is negligible. Override via GROQ_MODEL
+// (e.g. whisper-large-v3-turbo for lower quota use, distil-whisper-large-v3-en
+// for English-only fastest).
+const GROQ_MODEL = process.env.GROQ_MODEL ?? "whisper-large-v3";
+
 export class GroqAsrClient implements AsrClient {
   readonly name = "groq";
 
@@ -10,7 +16,7 @@ export class GroqAsrClient implements AsrClient {
   async transcribe(wavBuffer: Buffer, opts?: TranscribeOptions): Promise<string> {
     const form = new FormData();
     form.append("file", new Blob([new Uint8Array(wavBuffer)], { type: "audio/wav" }), "audio.wav");
-    form.append("model", "whisper-large-v3-turbo");
+    form.append("model", GROQ_MODEL);
     form.append("language", opts?.language ?? "zh");
     form.append("response_format", "json");
     if (opts?.prompt) form.append("prompt", opts.prompt.slice(0, 224));
