@@ -30,6 +30,15 @@ struct Conversation: Identifiable, Codable, Equatable {
     var worktreeId: String?
 }
 
+/// ADR-023 Phase C: a paused Vessel workflow awaiting a HITL choice.
+struct WorkflowChoice: Identifiable, Equatable {
+    var id: String { workflowId }
+    let workflowId: String
+    let step: Int
+    let message: String
+    let options: [String]
+}
+
 struct QueuedPrompt: Identifiable, Equatable {
     let id: String
     let text: String
