@@ -28,6 +28,10 @@ import {
   permissionRouter,
   registerPermissionChannel,
   resolvePermission,
+  detachPermissionChannel,
+  reattachPermissionChannel,
+  terminatePermissionChannel,
+  getPendingPermission,
 } from "./routes/permission.js";
 import { inboxRouter } from "./routes/inbox.js";
 import { updateCheckRouter } from "./routes/update-check.js";
@@ -56,7 +60,23 @@ import {
   setActiveRunCountFn as heartbeatSetActiveRunCountFn,
   setNotificationChannelCount as heartbeatSetNotificationChannelCount,
 } from "./heartbeat.js";
-import { register as registerRun, unregister as unregisterRun, activeCount as runRegistryActiveCount } from "./run-registry.js";
+import {
+  register as registerRun,
+  unregister as unregisterRun,
+  activeCount as runRegistryActiveCount,
+  emit as emitRun,
+  attach as attachRun,
+  detach as detachRun,
+  get as getRun,
+  setSessionId as setRunSessionId,
+  setPending as setRunPending,
+  recordTerminal as recordRunTerminal,
+  markInterrupting as markRunInterrupting,
+  touchLiveness as touchRunLiveness,
+  startReaper as startRunReaper,
+  setReapListener as setRunReapListener,
+  WAITING_DETACHED_TTL_MS,
+} from "./run-registry.js";
 import {
   authMiddleware,
   checkWsAuth,
@@ -75,6 +95,29 @@ const PORT = Number(process.env.PORT ?? 3030);
 // explicitly. Tailscale serve / reverse proxy handles external access.
 const HOST = process.env.BACKEND_HOST ?? "127.0.0.1";
 const BACKEND_BASE = process.env.BACKEND_BASE ?? `http://localhost:${PORT}`;
+// ADR-023 C6: master gate. OFF by default → ws_close keeps the pre-ADR-023
+// abort behavior for ALL runs (old-iOS byte-identical, NF2). Rollback = unset
+// this env (no redeploy/client change). A run is survive-eligible only if this
+// is on AND the creating client declared clientCapabilities.reattach.
+const RUN_SURVIVES_DISCONNECT =
+  process.env.VESSEL_RUN_SURVIVES_DISCONNECT === "1" ||
+  process.env.VESSEL_RUN_SURVIVES_DISCONNECT === "true";
+
+// ADR-023 C4.2: start the single orphan reaper. The reap listener does the
+// side-effects (permission terminate + telemetry) so run-registry imports
+// nothing. Only the reaper + client_interrupt abort runs (I-12).
+setRunReapListener((runId, event, run) => {
+  if (event === "terminal_gc") {
+    unregisterRun(runId);
+    return;
+  }
+  // orphan_aborted / waiting_orphan_aborted / liveness_lost
+  if (event === "orphan_aborted" || event === "waiting_orphan_aborted") {
+    terminatePermissionChannel(run.permissionToken);
+  }
+  console.log(`[reaper] ${event} run=${runId} state=${run.state}`);
+});
+startRunReaper();
 
 // M1A-α 4-way review MAJOR R-M1Aα-3: vessel-core orchestrator routes can spawn
 // Claude CLI subprocesses (capability-coding). Refuse to start when bound to a
@@ -398,7 +441,8 @@ server.on("upgrade", (req, socket, head) => {
 interface RunHandle {
   abort: AbortController;
   permissionToken: string;
-  unregisterPermission: () => void;
+  /** ADR-023 C6: did the creating user_prompt declare reattach + flag on? */
+  surviveEligible: boolean;
 }
 
 wss.on("connection", (ws) => {
@@ -406,10 +450,29 @@ wss.on("connection", (ws) => {
   const runs = new Map<string, RunHandle>();
   const conn = { runs };
   allConnections.add(conn);
+  // ADR-023: stable id so run-registry knows which connection owns a run's
+  // sink; a late ws_close from a superseded connection won't clobber a newer
+  // reattach (run-registry.detach checks this).
+  const connectionId = randomUUID();
 
   const send = (msg: ServerMessage) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
   };
+
+  // ADR-023 C4.3 S5: backend-owned WS liveness. Heartbeat ping every 30s;
+  // a pong (or any inbound frame) refreshes lastLivenessAt for this
+  // connection's runs. The reaper detaches attached_running runs whose
+  // liveness is stale > ATTACHED_LIVENESS_TTL_MS (half-open / iOS-suspend).
+  const touchOwnRunsLiveness = () => {
+    for (const runId of runs.keys()) touchRunLiveness(runId);
+  };
+  const livenessTimer = setInterval(() => {
+    if (ws.readyState === ws.OPEN) {
+      try { ws.ping(); } catch { /* socket dying; reaper will reap */ }
+    }
+  }, 30_000);
+  livenessTimer.unref?.();
+  ws.on("pong", touchOwnRunsLiveness);
 
   // Per-connection fs watch subscriptions: cwd → unsubscribe.
   const fsSubs = new Map<string, () => void>();
@@ -421,6 +484,8 @@ wss.on("connection", (ws) => {
   const vesselRuns = new Map<string, { abort: AbortController; vesselSessionId: string }>();
 
   ws.on("message", async (raw) => {
+    // Any inbound frame proves the client is alive (S5 liveness).
+    touchOwnRunsLiveness();
     let msg: ClientMessage;
     try {
       msg = JSON.parse(raw.toString());
@@ -430,23 +495,87 @@ wss.on("connection", (ws) => {
     }
 
     if (msg.type === "permission_reply") {
-      // O(1) routing when client supplies runId; fall back to scan otherwise.
+      // O(1) via this connection's runs; else via run-registry (the run may
+      // have been reattached so it's no longer in this map but still global).
       if (msg.runId) {
         const handle = runs.get(msg.runId);
-        if (handle) {
-          resolvePermission(handle.permissionToken, msg.requestId, msg.decision);
+        const token = handle?.permissionToken ?? getRun(msg.runId)?.permissionToken;
+        if (token) {
+          resolvePermission(token, msg.requestId, msg.decision, msg.message);
+          setRunPending(msg.runId, undefined); // clears the shorter waiting-TTL
           return;
         }
       }
       for (const handle of runs.values()) {
-        resolvePermission(handle.permissionToken, msg.requestId, msg.decision);
+        resolvePermission(handle.permissionToken, msg.requestId, msg.decision, msg.message);
       }
       return;
     }
 
+    // ADR-023 C1/S6: reattach a still-believed-busy conversation after a
+    // reconnect. Replaces the client's old unconditional force-clear.
+    if (msg.type === "reattach_run") {
+      const cwdErr = verifyAllowedPath(msg.cwd); // m-CWD: same gate as user_prompt
+      if (cwdErr) {
+        send({ type: "error", runId: msg.runId, error: cwdErr });
+        return;
+      }
+      const run = getRun(msg.runId);
+      if (!run) {
+        // No record (backend restarted / GC'd) → explicit unknown; client
+        // falls back to transcript reconcile or force-clear (I-7).
+        send({ type: "run_status", runId: msg.runId, status: "unknown" });
+        return;
+      }
+      if (run.terminal) {
+        send({
+          type: "run_status",
+          runId: msg.runId,
+          status:
+            run.terminal.endedReason === "completed" ? "completed"
+              : run.terminal.endedReason === "interrupted" ? "aborted"
+              : "failed",
+          endedReason: run.terminal.endedReason,
+          sessionId: run.sessionId,
+        });
+        return;
+      }
+      if (run.state === "expired") {
+        send({ type: "run_status", runId: msg.runId, status: "expired", sessionId: run.sessionId });
+        return;
+      }
+      if (run.state === "interrupting") {
+        // Don't synthesize `aborted` inside cli-runner's SIGTERM→SIGKILL 5s
+        // window — the real session_ended drives the final UI state.
+        attachRun(msg.runId, send, connectionId);
+        runs.set(msg.runId, { abort: run.abort, permissionToken: run.permissionToken, surviveEligible: true });
+        reattachPermissionChannel(run.permissionToken);
+        send({ type: "run_status", runId: msg.runId, status: "interrupting", sessionId: run.sessionId });
+        return;
+      }
+      // running (attached or detached) → atomically rebind the sink to THIS
+      // connection; subsequent sdk_message/session_ended flow here.
+      attachRun(msg.runId, send, connectionId);
+      runs.set(msg.runId, { abort: run.abort, permissionToken: run.permissionToken, surviveEligible: true });
+      reattachPermissionChannel(run.permissionToken);
+      const pend = getPendingPermission(run.permissionToken);
+      send({
+        type: "run_status",
+        runId: msg.runId,
+        status: "running",
+        sessionId: run.sessionId,
+        pending: pend
+          ? { kind: "permission", requestId: pend.requestId, toolName: pend.toolName, input: pend.input }
+          : undefined,
+      });
+      return;
+    }
+
     if (msg.type === "interrupt") {
+      // C3: client_interrupt is a REAL abort (distinct from ws_close detach).
       if (msg.runId) {
-        runs.get(msg.runId)?.abort.abort();
+        markRunInterrupting(msg.runId);
+        (runs.get(msg.runId)?.abort ?? getRun(msg.runId)?.abort)?.abort();
       } else {
         for (const h of runs.values()) h.abort.abort();
       }
@@ -522,27 +651,45 @@ wss.on("connection", (ws) => {
 
       const abort = new AbortController();
       const permissionToken = randomUUID();
+      // ADR-023 C6: survive-disconnect only if flag on AND client declared it.
+      const surviveEligible = RUN_SURVIVES_DISCONNECT && !!msg.clientCapabilities?.reattach;
 
-      // wrap permission channel send so each permission_request carries this runId
-      // AND fires a notification (Telegram / Server酱) so the user knows claude
-      // has paused waiting for approval — they can decide whether to reach for
-      // the iOS app right now or let it sit.
+      // ADR-023 I-13: run output goes through the run-owned sink (run-registry
+      // emit), NOT a closure-captured per-connection `send`. emitRun looks up
+      // the CURRENT bound connection so a reattach transparently redirects.
       const channelSend = (m: unknown) => {
         const obj = m as { type?: string; toolName?: string };
         if (obj?.type === "permission_request") {
-          send({ ...(m as any), runId });
+          emitRun(runId, { ...(m as any), runId } as ServerMessage);
+          setRunPending(runId, {
+            kind: "permission",
+            requestId: (m as any).requestId,
+            toolName: obj.toolName ?? "(unknown tool)",
+            input: (m as any).input,
+          });
           void notifyHub.publishPermissionPending(notifyCtx, obj.toolName ?? "(unknown tool)");
         } else {
-          send(m as ServerMessage);
+          emitRun(runId, m as ServerMessage);
         }
       };
-      const unregisterPermission = registerPermissionChannel(permissionToken, channelSend);
+      registerPermissionChannel(permissionToken, channelSend);
 
-      runs.set(runId, { abort, permissionToken, unregisterPermission });
-      registerRun(runId, { abort, cwd: msg.cwd, prompt: msg.prompt, startedAt: Date.now() });
+      runs.set(runId, { abort, permissionToken, surviveEligible });
+      registerRun(runId, {
+        abort,
+        cwd: msg.cwd,
+        prompt: msg.prompt,
+        startedAt: Date.now(),
+        capabilityReattach: surviveEligible,
+        permissionToken,
+        conversationId: undefined,
+        send,
+        connectionId,
+      });
       heartbeatRecordSpawn();
 
       void (async () => {
+        let endReason: SessionEndReason = "completed";
         try {
           await runSession({
             prompt: msg.prompt,
@@ -556,30 +703,37 @@ wss.on("connection", (ws) => {
             authToken: process.env.VESSEL_TOKEN,
             signal: abort.signal,
             onMessage: (cliMsg) => {
-              send({ type: "sdk_message", runId, message: cliMsg });
+              emitRun(runId, { type: "sdk_message", runId, message: cliMsg });
               const m = cliMsg as { type?: string; subtype?: string; sessionId?: string; session_id?: string };
               if (m?.type === "system" && m?.subtype === "init") {
                 const sid = m.sessionId ?? m.session_id;
-                if (sid) notifyCtx.sessionId = sid;
+                if (sid) { notifyCtx.sessionId = sid; setRunSessionId(runId, sid); }
               }
             },
-            onClearRunMessages: () => send({ type: "clear_run_messages", runId }),
+            onClearRunMessages: () => emitRun(runId, { type: "clear_run_messages", runId }),
           });
-          const reason: SessionEndReason = abort.signal.aborted ? "interrupted" : "completed";
-          send({ type: "session_ended", runId, reason });
-          heartbeatRecordCompletion(reason);
-          void notifyHub.publishSessionCompletion(notifyCtx, reason);
+          endReason = abort.signal.aborted ? "interrupted" : "completed";
+          recordRunTerminal(runId, endReason);
+          emitRun(runId, { type: "session_ended", runId, reason: endReason });
+          heartbeatRecordCompletion(endReason);
+          void notifyHub.publishSessionCompletion(notifyCtx, endReason);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           console.error("[session error]", err);
-          send({ type: "error", runId, error: message });
-          send({ type: "session_ended", runId, reason: "error" });
+          endReason = "error";
+          recordRunTerminal(runId, "error");
+          emitRun(runId, { type: "error", runId, error: message });
+          emitRun(runId, { type: "session_ended", runId, reason: "error" });
           heartbeatRecordCompletion("error");
           void notifyHub.publishSessionCompletion(notifyCtx, "error");
         } finally {
-          unregisterPermission();
+          // C5: real run end → terminate (deny any in-flight so the hook
+          // fetch resolves; no zombie). NOT detach (that's ws_close only).
+          terminatePermissionChannel(permissionToken);
           runs.delete(runId);
-          unregisterRun(runId);
+          // Keep the run in run-registry with its terminal record so a late
+          // reattach gets the real status; the reaper GCs it after
+          // TERMINAL_RECORD_TTL (NF1). recordRunTerminal already set state.
           notifyHub.forgetRun(runId);
         }
       })();
@@ -659,9 +813,19 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     console.log("[ws] client disconnected");
-    for (const h of runs.values()) {
-      h.abort.abort();
-      h.unregisterPermission();
+    clearInterval(livenessTimer);
+    for (const [runId, h] of runs.entries()) {
+      if (h.surviveEligible) {
+        // ADR-023 C3/I-12: ws_close DETACHES, never aborts. The run keeps
+        // running; the reaper bounds it (DETACHED_TTL / WAITING_DETACHED_TTL).
+        detachRun(runId, connectionId);
+        detachPermissionChannel(h.permissionToken, WAITING_DETACHED_TTL_MS);
+      } else {
+        // Old client / flag off → pre-ADR-023 behavior, byte-identical (NF2).
+        h.abort.abort();
+        terminatePermissionChannel(h.permissionToken);
+        unregisterRun(runId);
+      }
     }
     runs.clear();
     for (const unsub of fsSubs.values()) unsub();

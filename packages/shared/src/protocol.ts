@@ -27,6 +27,14 @@ export type ClientMessage =
       resumeSessionId?: string;
       /** optional image attachments — sent alongside the text prompt */
       attachments?: ImageAttachment[];
+      /**
+       * ADR-023 C6: client capability negotiation. A run only becomes
+       * survive-disconnect eligible if this declares `reattach: true` AND
+       * the backend env VESSEL_RUN_SURVIVES_DISCONNECT is on. Old clients
+       * omit this → treated as unsupported → ws_close keeps current abort
+       * behavior (NF2: no UI↔transcript split for the cli-runner path).
+       */
+      clientCapabilities?: { reattach?: boolean };
     }
   | {
       type: "permission_reply";
@@ -36,8 +44,26 @@ export type ClientMessage =
       runId?: string;
       // Optional: tool name for logging/audit
       toolName?: string;
+      // ADR-023 Phase C: "deny + tell Claude what to do instead". Free-text
+      // forwarded to the PreToolUse hook as the deny reason (Claude sees it
+      // and can redirect). Ignored when decision === "allow".
+      message?: string;
     }
   | { type: "interrupt"; runId?: string }
+  // ── ADR-023 iOS disconnect reattach (C1) ──────────────────────────────
+  // Sent by the client after a reconnect for each conversation it still
+  // believes is busy, REPLACING the old unconditional force-clear. Backend
+  // verifyAllowedPath(cwd) first; then answers with `run_status`.
+  | {
+      type: "reattach_run";
+      runId: string;
+      conversationId: string;
+      /** CLI sessionId; empty for new conversations before first systemInit
+       *  (CLAUDE.md invariant #8: Conversation.id ≠ sessionId until then). */
+      sessionId?: string;
+      /** allowlist-checked; fallback to locate transcript if runId unknown. */
+      cwd: string;
+    }
   | { type: "fs_subscribe"; cwd: string }
   | { type: "fs_unsubscribe"; cwd: string }
   | {
@@ -88,6 +114,32 @@ export type ServerMessage =
       type: "session_ended";
       runId: string;
       reason: "completed" | "interrupted" | "error";
+    }
+  // ── ADR-023 iOS disconnect reattach (C2) — reply to `reattach_run` ─────
+  // `waiting_workflow_choice` is intentionally NOT here: workflows are a
+  // runId-less broadcast subsystem (vessel_workflow_paused) and survive
+  // disconnect server-side already — Phase C renders them as additive iOS
+  // UI, not via this runId-keyed reattach wire. `interrupting` exists so we
+  // never synthesize `aborted` inside cli-runner's SIGTERM→SIGKILL 5s window.
+  | {
+      type: "run_status";
+      runId: string;
+      status:
+        | "running"
+        | "interrupting"
+        | "completed"
+        | "failed"
+        | "aborted"
+        | "expired"
+        | "unknown";
+      endedReason?: "completed" | "interrupted" | "error";
+      sessionId?: string;
+      pending?: {
+        kind: "permission";
+        requestId: string;
+        toolName: string;
+        input: unknown;
+      };
     }
   | {
       type: "fs_changed";
