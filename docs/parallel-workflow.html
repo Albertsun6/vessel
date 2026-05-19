@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vessel 并行开发操作手册</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.14.1/cdn.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  body { font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .mono { font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; }
+  .copy-btn { transition: all 0.15s; }
+  .copy-btn:active { transform: scale(0.95); }
+  .prompt-card { border-left: 3px solid #3b82f6; }
+  .step-line::before { content: ''; position: absolute; left: 19px; top: 40px; bottom: -8px; width: 2px; background: #e5e7eb; }
+  .step-line:last-child::before { display: none; }
+  pre { white-space: pre-wrap; word-break: break-word; }
+  .mermaid { text-align: center; }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen" x-data="{ activeTab: 'overview' }">
+
+<!-- Header -->
+<header class="bg-white border-b border-gray-200 sticky top-0 z-10">
+  <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div>
+      <h1 class="text-lg font-semibold tracking-tight">Vessel 并行开发</h1>
+      <p class="text-xs text-gray-500 mono">git worktree + Steward + eva.json</p>
+    </div>
+    <div class="flex gap-1 text-sm">
+      <button @click="activeTab='overview'" :class="activeTab==='overview' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'" class="px-3 py-1.5 rounded-md font-medium transition-colors">总览</button>
+      <button @click="activeTab='flow'" :class="activeTab==='flow' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'" class="px-3 py-1.5 rounded-md font-medium transition-colors">操作流程</button>
+      <button @click="activeTab='prompts'" :class="activeTab==='prompts' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'" class="px-3 py-1.5 rounded-md font-medium transition-colors">短语速查</button>
+      <button @click="activeTab='infra'" :class="activeTab==='infra' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'" class="px-3 py-1.5 rounded-md font-medium transition-colors">基础设施</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-6 py-8">
+
+<!-- ==================== TAB: OVERVIEW ==================== -->
+<div x-show="activeTab==='overview'" x-cloak>
+
+  <!-- Intro -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+    <h2 class="text-base font-semibold mb-3">并行开发是什么</h2>
+    <p class="text-sm text-gray-600 leading-relaxed mb-4">
+      Vessel 支持多个 Claude Code session 同时工作在不同任务上，互不干扰。
+      核心是 <span class="mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">git worktree</span> 隔离代码 +
+      <span class="mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">端口隔离</span> 跑独立 backend +
+      <span class="mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">Steward</span> 做任务调度协调。
+    </p>
+    <div class="grid grid-cols-3 gap-4">
+      <div class="bg-blue-50 rounded-lg p-4">
+        <div class="text-blue-700 font-semibold text-sm mb-1">主线 (Master)</div>
+        <div class="text-xs text-blue-600">你现在这个窗口<br/>~/Desktop/Vessel<br/>port :3032</div>
+      </div>
+      <div class="bg-purple-50 rounded-lg p-4">
+        <div class="text-purple-700 font-semibold text-sm mb-1">Worker 1</div>
+        <div class="text-xs text-purple-600">独立 worktree 目录<br/>自己的分支<br/>独立端口</div>
+      </div>
+      <div class="bg-green-50 rounded-lg p-4">
+        <div class="text-green-700 font-semibold text-sm mb-1">Worker 2</div>
+        <div class="text-xs text-green-600">另一个 worktree<br/>另一个分支<br/>另一个端口</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three layers diagram -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+    <h2 class="text-base font-semibold mb-4">三层架构</h2>
+    <div class="mermaid">
+flowchart TB
+  subgraph U ["👤 你（用户）"]
+    direction LR
+    P["粘短语\n到 Claude"]
+  end
+
+  subgraph S ["🤖 Steward（主线 Claude）"]
+    direction LR
+    B["读 BACKLOG.md\n单一写入点"]
+    D["Dispatch 分析\n等你拍板"]
+  end
+
+  subgraph W ["🔧 Infrastructure"]
+    direction LR
+    EJ["eva.json\nworktree 注册表"]
+    GW["git worktree\n代码隔离"]
+    PT["端口隔离\n:3032/:3033…"]
+  end
+
+  subgraph WK ["⚙️ Worker Sessions"]
+    direction LR
+    W1["Claude Code\n窗口 1"]
+    W2["Claude Code\n窗口 2"]
+  end
+
+  P --> B
+  B --> D
+  D --> EJ
+  EJ --> GW
+  EJ --> PT
+  GW --> W1
+  GW --> W2
+  W1 -- "完成信号\nsteward-signal-done.sh" --> B
+  W2 -- "完成信号" --> B
+    </div>
+  </div>
+
+  <!-- Key constraints -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+    <h2 class="text-base font-semibold mb-4">关键约束（不能绕过）</h2>
+    <div class="space-y-3">
+      <div class="flex gap-3 items-start">
+        <span class="bg-red-100 text-red-700 text-xs font-mono px-2 py-1 rounded shrink-0 mt-0.5">I1</span>
+        <div><div class="text-sm font-medium">BACKLOG.md 是唯一写入点</div><div class="text-xs text-gray-500">只有主线 Claude 改它，worker 不直接改</div></div>
+      </div>
+      <div class="flex gap-3 items-start">
+        <span class="bg-orange-100 text-orange-700 text-xs font-mono px-2 py-1 rounded shrink-0 mt-0.5">I8</span>
+        <div><div class="text-sm font-medium">三层执行白名单</div><div class="text-xs text-gray-500">读操作自动跑 · 写操作等 ack · 破坏性操作等明示肯定</div></div>
+      </div>
+      <div class="flex gap-3 items-start">
+        <span class="bg-yellow-100 text-yellow-700 text-xs font-mono px-2 py-1 rounded shrink-0 mt-0.5">I11</span>
+        <div><div class="text-sm font-medium">Dispatch 必须用户拍板</div><div class="text-xs text-gray-500">Claude 给分析 + 推荐，但不静默选 spawn/stay</div></div>
+      </div>
+      <div class="flex gap-3 items-start">
+        <span class="bg-blue-100 text-blue-700 text-xs font-mono px-2 py-1 rounded shrink-0 mt-0.5">I13</span>
+        <div><div class="text-sm font-medium">Worker 代码 PR 不默认 auto-merge</div><div class="text-xs text-gray-500">文档类 PR 可 auto-merge，代码类必须主线 + 你 review</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task lifecycle -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6">
+    <h2 class="text-base font-semibold mb-4">Task 状态机</h2>
+    <div class="mermaid">
+stateDiagram-v2
+  [*] --> planned : 加待办
+  planned --> in_progress : 开始干
+  planned --> blocked : blocked 因为
+  in_progress --> done : 收线 ✓
+  in_progress --> blocked : 中途暂停
+  blocked --> planned : unblock
+  in_progress --> dropped : drop 因为
+  planned --> dropped : drop 因为
+  done --> [*]
+  dropped --> [*]
+    </div>
+    <p class="text-xs text-gray-500 mt-3">done 和 dropped 永久保留，作为审计 trail</p>
+  </div>
+
+</div>
+
+<!-- ==================== TAB: FLOW ==================== -->
+<div x-show="activeTab==='flow'" x-cloak>
+
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-sm text-amber-800">
+    <strong>核心原则：</strong>你从来不需要手敲 CLI 命令——把短语粘到 Claude，它跑命令、问 ack、收尾。
+  </div>
+
+  <!-- Step by step -->
+  <h2 class="text-base font-semibold mb-4">完整操作流程</h2>
+
+  <!-- Step 1 -->
+  <div class="relative step-line mb-2">
+    <div class="flex gap-4 items-start bg-white rounded-xl border border-gray-200 p-5">
+      <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">1</div>
+      <div class="flex-1">
+        <div class="font-semibold mb-1">开始新会话 → Boot</div>
+        <p class="text-sm text-gray-600 mb-3">每次打开新 Cursor/Claude Code 窗口时，先触发 boot ritual，让 Claude 知道现在 backlog 状态。</p>
+        <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">/boot</div>
+        <p class="text-xs text-gray-500 mt-2">Claude 会 echo：<span class="mono">Backlog: N in_progress · M planned · K blocked</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="relative step-line mb-2">
+    <div class="flex gap-4 items-start bg-white rounded-xl border border-gray-200 p-5">
+      <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">2</div>
+      <div class="flex-1">
+        <div class="font-semibold mb-1">选一个任务开干</div>
+        <p class="text-sm text-gray-600 mb-3">告诉 Claude 你想开始哪个 task。它会做 Dispatch 分析然后等你拍板。</p>
+        <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">开始干 &lt;task-id&gt;</div>
+        <div class="mt-3 bg-gray-50 rounded-lg p-4 text-sm">
+          <div class="font-medium mb-2 text-gray-700">Claude 会给你这样的分析：</div>
+          <pre class="text-xs text-gray-600 mono">Task: m2-voice-proposal
+  size=M · priority=P2
+  parallel_safe_files=["docs/proposals/"]
+
+Spawn 分析：
+  • size=M → 倾向 spawn
+  • 零文件冲突 → spawn 安全
+  • 主窗口：idle
+
+建议：SPAWN
+理由：文档任务，独立性强，开新窗口不亏</pre>
+        </div>
+        <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+            <div class="mono font-bold text-blue-700 mb-1">ok spawn</div>
+            <div class="text-blue-600">开新 worktree 窗口</div>
+          </div>
+          <div class="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+            <div class="mono font-bold text-green-700 mb-1">ok stay</div>
+            <div class="text-green-600">在本窗口做</div>
+          </div>
+          <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+            <div class="mono font-bold text-gray-700 mb-1">用户做</div>
+            <div class="text-gray-600">你自己做，Claude 跟踪</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2b: spawn path -->
+  <div class="relative step-line mb-2 ml-8">
+    <div class="flex gap-4 items-start bg-purple-50 rounded-xl border border-purple-200 p-5">
+      <div class="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold shrink-0">2b</div>
+      <div class="flex-1">
+        <div class="font-semibold mb-1 text-purple-800">如果选 spawn：Claude 给你 5 步命令</div>
+        <p class="text-sm text-purple-700 mb-3">Claude echo 以下步骤，你 <span class="mono">ok</span> 后它执行：</p>
+        <div class="space-y-2 text-xs mono">
+          <div class="bg-white rounded p-2 border border-purple-200"><span class="text-purple-500">1.</span> git worktree add ~/Desktop/Vessel-&lt;name&gt; -b feat/&lt;branch&gt;</div>
+          <div class="bg-white rounded p-2 border border-purple-200"><span class="text-purple-500">2.</span> 写 eva.json 注册 worktree（port / dataDir / owns）</div>
+          <div class="bg-white rounded p-2 border border-purple-200"><span class="text-purple-500">3.</span> 新目录写 .env.local (PORT=&lt;N&gt;)</div>
+          <div class="bg-white rounded p-2 border border-purple-200"><span class="text-purple-500">4.</span> 你手动打开新 Cursor 窗口 → 指向那个目录</div>
+          <div class="bg-white rounded p-2 border border-purple-200"><span class="text-purple-500">5.</span> 给新 session 的启动 prompt 模板</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="relative step-line mb-2">
+    <div class="flex gap-4 items-start bg-white rounded-xl border border-gray-200 p-5">
+      <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">3</div>
+      <div class="flex-1">
+        <div class="font-semibold mb-1">Worker 完成 → 发完成信号</div>
+        <p class="text-sm text-gray-600 mb-3">Worker session 完成 task 时，自己跑：</p>
+        <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">./scripts/steward-signal-done.sh &lt;task-id&gt; --pr &lt;PR_URL&gt; --summary "1行描述"</div>
+        <p class="text-xs text-gray-500 mt-2">写入 <span class="mono">~/.vessel/spawn-done/&lt;task-id&gt;.json</span>。Worker 不直接改 BACKLOG.md。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="relative step-line mb-2">
+    <div class="flex gap-4 items-start bg-white rounded-xl border border-gray-200 p-5">
+      <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">4</div>
+      <div class="flex-1">
+        <div class="font-semibold mb-1">主线查看完成项</div>
+        <p class="text-sm text-gray-600 mb-3">在主线窗口粘：</p>
+        <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">pnpm eva:collect</div>
+        <p class="text-xs text-gray-500 mt-2">Claude 扫 spawn-done 目录，列出所有 pending 完成项给你看。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="relative step-line mb-2">
+    <div class="flex gap-4 items-start bg-white rounded-xl border border-gray-200 p-5">
+      <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">5</div>
+      <div class="flex-1">
+        <div class="font-semibold mb-1">收线 → 清理 worktree</div>
+        <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm mb-3">ok 收线 &lt;task-id&gt;</div>
+        <p class="text-sm text-gray-600 mb-2">Claude 做：</p>
+        <ul class="text-sm text-gray-600 space-y-1 list-disc list-inside">
+          <li>改 BACKLOG: status → done + completed_at</li>
+          <li>清 spawn-done flag</li>
+          <li>跑 <span class="mono text-xs">pnpm eva:hook pre-remove --dry-run &lt;name&gt;</span> 预演清理</li>
+          <li>等你 ok → 执行清理（pkill backend / rm worktree 目录）</li>
+          <li>git worktree remove</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three tiers -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6 mt-6">
+    <h2 class="text-base font-semibold mb-4">三层执行白名单（I8）</h2>
+    <div class="space-y-3">
+      <div class="flex gap-3 items-center p-3 bg-green-50 rounded-lg border border-green-200">
+        <div class="w-3 h-3 rounded-full bg-green-500 shrink-0"></div>
+        <div class="flex-1">
+          <span class="font-medium text-green-800 text-sm">Read-only auto</span>
+          <span class="text-green-600 text-xs ml-2">— Claude 自动跑，不问你</span>
+        </div>
+        <div class="mono text-xs text-green-700">git status / ls / cat / pnpm eva:sessions</div>
+      </div>
+      <div class="flex gap-3 items-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+        <div class="w-3 h-3 rounded-full bg-yellow-500 shrink-0"></div>
+        <div class="flex-1">
+          <span class="font-medium text-yellow-800 text-sm">Write needs ack</span>
+          <span class="text-yellow-600 text-xs ml-2">— echo 命令，等你 ok</span>
+        </div>
+        <div class="mono text-xs text-yellow-700">git commit / 改 BACKLOG.md / gh pr edit</div>
+      </div>
+      <div class="flex gap-3 items-center p-3 bg-red-50 rounded-lg border border-red-200">
+        <div class="w-3 h-3 rounded-full bg-red-500 shrink-0"></div>
+        <div class="flex-1">
+          <span class="font-medium text-red-800 text-sm">Destructive: 明示肯定</span>
+          <span class="text-red-600 text-xs ml-2">— 必须你主动短语</span>
+        </div>
+        <div class="mono text-xs text-red-700">rm -rf / git push --force / worktree remove</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ==================== TAB: PROMPTS ==================== -->
+<div x-show="activeTab==='prompts'" x-cloak>
+
+  <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-sm text-blue-800">
+    点击卡片右上角按钮一键复制。粘到任意 Claude Code / Cursor 窗口即可触发。
+  </div>
+
+  <div class="grid gap-4">
+
+    <!-- Boot -->
+    <div x-data="{ copied: false }" class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">1</span>
+          <span class="text-sm font-semibold ml-2">Boot — 启动/看下一步</span>
+        </div>
+        <button @click="navigator.clipboard.writeText('/boot'); copied=true; setTimeout(()=>copied=false,1500)"
+          class="copy-btn text-xs px-3 py-1 rounded-lg border transition-colors"
+          :class="copied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'">
+          <span x-text="copied ? '✓ 已复制' : '复制'"></span>
+        </button>
+      </div>
+      <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">/boot</div>
+      <p class="text-xs text-gray-500 mt-2">每个新 session 开始时用。Claude 读 BACKLOG → echo 状态摘要 → 推荐 top 3 候选任务</p>
+    </div>
+
+    <!-- 开始干 -->
+    <div x-data="{ copied: false }" class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">2</span>
+          <span class="text-sm font-semibold ml-2">开始一项任务</span>
+        </div>
+        <button @click="navigator.clipboard.writeText('开始干 <task-id>'); copied=true; setTimeout(()=>copied=false,1500)"
+          class="copy-btn text-xs px-3 py-1 rounded-lg border transition-colors"
+          :class="copied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'">
+          <span x-text="copied ? '✓ 已复制' : '复制'"></span>
+        </button>
+      </div>
+      <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">开始干 &lt;task-id&gt;</div>
+      <p class="text-xs text-gray-500 mt-2">Claude 给 Dispatch 分析 → 等你 <span class="mono">ok spawn</span> / <span class="mono">ok stay</span> / <span class="mono">用户做</span> 拍板</p>
+    </div>
+
+    <!-- 即时代办 -->
+    <div x-data="{ copied: false }" class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <span class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">快捷</span>
+          <span class="text-sm font-semibold ml-2">即时代办（加 + 立刻做 合一）</span>
+        </div>
+        <button @click="navigator.clipboard.writeText('即时代办: <title>; P1; M; [note]'); copied=true; setTimeout(()=>copied=false,1500)"
+          class="copy-btn text-xs px-3 py-1 rounded-lg border transition-colors"
+          :class="copied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'">
+          <span x-text="copied ? '✓ 已复制' : '复制'"></span>
+        </button>
+      </div>
+      <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">即时代办: &lt;title&gt;; P1; M; [note]</div>
+      <p class="text-xs text-gray-500 mt-2">跳过 planned，直接 status=in_progress。等价于 `加待办` + `开始干` 两步合一</p>
+    </div>
+
+    <!-- 收线 -->
+    <div x-data="{ copied: false }" class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">3</span>
+          <span class="text-sm font-semibold ml-2">收线 — 完成一项</span>
+        </div>
+        <button @click="navigator.clipboard.writeText('<task-id> 收线'); copied=true; setTimeout(()=>copied=false,1500)"
+          class="copy-btn text-xs px-3 py-1 rounded-lg border transition-colors"
+          :class="copied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'">
+          <span x-text="copied ? '✓ 已复制' : '复制'"></span>
+        </button>
+      </div>
+      <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">&lt;task-id&gt; 收线</div>
+      <p class="text-xs text-gray-500 mt-2">标 done + 清理 worktree（如有）+ 清 eva.json 注册</p>
+    </div>
+
+    <!-- 加待办 -->
+    <div x-data="{ copied: false }" class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">4</span>
+          <span class="text-sm font-semibold ml-2">加一项（先记，不急做）</span>
+        </div>
+        <button @click="navigator.clipboard.writeText('加待办: <title>; P2; M; [note]'); copied=true; setTimeout(()=>copied=false,1500)"
+          class="copy-btn text-xs px-3 py-1 rounded-lg border transition-colors"
+          :class="copied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'">
+          <span x-text="copied ? '✓ 已复制' : '复制'"></span>
+        </button>
+      </div>
+      <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">加待办: &lt;title&gt;; P2; M; [note]</div>
+      <p class="text-xs text-gray-500 mt-2">加到 BACKLOG status=planned，等你之后 `开始干` 再做</p>
+    </div>
+
+    <!-- 看活窗口 -->
+    <div x-data="{ copied: false }" class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex items-start justify-between mb-2">
+        <div>
+          <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-medium">9</span>
+          <span class="text-sm font-semibold ml-2">看现在有哪些窗口在干什么</span>
+        </div>
+        <button @click="navigator.clipboard.writeText('现在哪些窗口在干啥'); copied=true; setTimeout(()=>copied=false,1500)"
+          class="copy-btn text-xs px-3 py-1 rounded-lg border transition-colors"
+          :class="copied ? 'bg-green-100 border-green-300 text-green-700' : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'">
+          <span x-text="copied ? '✓ 已复制' : '复制'"></span>
+        </button>
+      </div>
+      <div class="prompt-card bg-gray-50 rounded-lg p-3 mono text-sm">现在哪些窗口在干啥</div>
+      <p class="text-xs text-gray-500 mt-2">跑 pnpm eva:sessions，展示 PID / 分支 / cwd / 最近活动时间</p>
+    </div>
+
+    <!-- 其他操作 -->
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="text-sm font-semibold mb-3">其余操作（偶尔用）</div>
+      <div class="grid grid-cols-2 gap-2 text-xs mono">
+        <div class="bg-gray-50 rounded p-2">&lt;id&gt; blocked 因为 &lt;reason&gt;</div>
+        <div class="bg-gray-50 rounded p-2 text-gray-500">← 暂停一项</div>
+        <div class="bg-gray-50 rounded p-2">&lt;id&gt; unblock</div>
+        <div class="bg-gray-50 rounded p-2 text-gray-500">← 恢复一项</div>
+        <div class="bg-gray-50 rounded p-2">&lt;id&gt; drop 因为 &lt;reason&gt;</div>
+        <div class="bg-gray-50 rounded p-2 text-gray-500">← 放弃一项</div>
+        <div class="bg-gray-50 rounded p-2">&lt;id&gt; 改 P&lt;0-3&gt;</div>
+        <div class="bg-gray-50 rounded p-2 text-gray-500">← 改优先级</div>
+        <div class="bg-gray-50 rounded p-2">pnpm eva:collect</div>
+        <div class="bg-gray-50 rounded p-2 text-gray-500">← 查看 worker 完成项</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== TAB: INFRA ==================== -->
+<div x-show="activeTab==='infra'" x-cloak>
+
+  <!-- eva.json -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+    <h2 class="text-base font-semibold mb-1">eva.json — worktree 注册表</h2>
+    <p class="text-xs text-gray-500 mb-4">项目根目录，机器可读，是并行状态的单一来源。查看：<span class="mono">pnpm eva:status</span></p>
+    <pre class="text-xs mono bg-gray-50 rounded-lg p-4 overflow-x-auto text-gray-700">{
+  "version": 1,
+  "worktrees": [
+    {
+      "name": "feat-voice-worker",       // worktree 名称
+      "branch": "feat/voice-capability", // git 分支
+      "path": "~/Desktop/Vessel-voice",  // 独立目录
+      "port": 3033,                      // 独立后端端口
+      "dataDir": "~/.claude-web-voice",  // 独立数据目录
+      "owns": [                          // 锁定的文件/函数
+        "packages/backend/src/routes/voice.ts"
+      ],
+      "status": "active",                // active / done / released
+      "since": "2026-05-19T08:00:00Z",
+      "hooks": {
+        "post-start": "PORT=3033 pnpm dev:backend &",
+        "pre-remove": "pkill -f voice-backend; rm -rf ~/.claude-web-voice"
+      }
+    }
+  ]
+}</pre>
+  </div>
+
+  <!-- Port table -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+    <h2 class="text-base font-semibold mb-4">端口分配约定</h2>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left text-xs text-gray-500 border-b border-gray-100">
+          <th class="pb-2 font-medium">实例</th>
+          <th class="pb-2 font-medium">端口</th>
+          <th class="pb-2 font-medium">数据目录</th>
+          <th class="pb-2 font-medium">目录</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        <tr class="py-2">
+          <td class="py-2 font-medium">主线（当前 prod）</td>
+          <td class="py-2 mono text-blue-700">:3032</td>
+          <td class="py-2 mono text-xs">~/.claude-web</td>
+          <td class="py-2 mono text-xs">~/Desktop/Vessel</td>
+        </tr>
+        <tr>
+          <td class="py-2 font-medium">Worker 1</td>
+          <td class="py-2 mono text-purple-700">:3033</td>
+          <td class="py-2 mono text-xs">~/.claude-web-w1</td>
+          <td class="py-2 mono text-xs">~/Desktop/Vessel-&lt;name&gt;</td>
+        </tr>
+        <tr>
+          <td class="py-2 font-medium">Worker 2</td>
+          <td class="py-2 mono text-green-700">:3034</td>
+          <td class="py-2 mono text-xs">~/.claude-web-w2</td>
+          <td class="py-2 mono text-xs">~/Desktop/Vessel-&lt;name2&gt;</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Lifecycle hooks -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+    <h2 class="text-base font-semibold mb-1">Lifecycle Hooks（H13）</h2>
+    <p class="text-xs text-gray-500 mb-4">手动触发，不自动运行。4 个生命周期点：</p>
+    <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="bg-gray-50 rounded-lg p-3">
+        <div class="mono text-xs font-bold text-gray-700 mb-1">pre-start</div>
+        <div class="text-xs text-gray-500">开始前准备（install deps 等）</div>
+      </div>
+      <div class="bg-gray-50 rounded-lg p-3">
+        <div class="mono text-xs font-bold text-gray-700 mb-1">post-start</div>
+        <div class="text-xs text-gray-500">启动后动作（跑 backend 等）</div>
+      </div>
+      <div class="bg-gray-50 rounded-lg p-3">
+        <div class="mono text-xs font-bold text-gray-700 mb-1">post-merge</div>
+        <div class="text-xs text-gray-500">PR merge 后（通知等）</div>
+      </div>
+      <div class="bg-gray-50 rounded-lg p-3">
+        <div class="mono text-xs font-bold text-gray-700 mb-1">pre-remove</div>
+        <div class="text-xs text-gray-500">清理前（pkill / rm 等）⚠️ 需 --yes</div>
+      </div>
+    </div>
+    <pre class="text-xs mono bg-gray-50 rounded-lg p-3 text-gray-700">pnpm eva:hook pre-start &lt;worktreeName&gt;
+pnpm eva:hook post-start &lt;worktreeName&gt;
+pnpm eva:hook pre-remove --dry-run &lt;worktreeName&gt;   # 先预演
+pnpm eva:hook pre-remove --yes &lt;worktreeName&gt;        # 含 rm/pkill 时必须 --yes</pre>
+  </div>
+
+  <!-- Worker PR policy -->
+  <div class="bg-white rounded-xl border border-gray-200 p-6">
+    <h2 class="text-base font-semibold mb-4">Worker PR 政策（I13）</h2>
+    <div class="space-y-3">
+      <div class="flex gap-3 items-start p-3 bg-red-50 rounded-lg border border-red-100">
+        <div class="text-red-500 text-lg shrink-0">✗</div>
+        <div>
+          <div class="text-sm font-medium text-red-800">代码类 PR（backend / frontend / ios-native / scripts）</div>
+          <div class="text-xs text-red-600 mt-0.5">Worker 可 push + gh pr create，但<strong>不 auto-merge</strong>。必须等主线 + 你 review 后手动 merge。</div>
+        </div>
+      </div>
+      <div class="flex gap-3 items-start p-3 bg-green-50 rounded-lg border border-green-100">
+        <div class="text-green-500 text-lg shrink-0">✓</div>
+        <div>
+          <div class="text-sm font-medium text-green-800">文档类 PR（docs / proposals / ADR / retrospectives）</div>
+          <div class="text-xs text-green-600 mt-0.5">Worker 在 signal 里备注 "ready for auto-merge"，主线确认后 <span class="mono">gh pr merge --auto</span>。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</main>
+
+<footer class="border-t border-gray-200 mt-12 py-6 text-center text-xs text-gray-400">
+  Vessel 并行开发手册 · 2026-05-19 · 源：docs/STEWARD_USAGE.md + CLAUDE.md
+</footer>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral', fontFamily: 'SF Mono, Fira Code, monospace' });
+</script>
+</body>
+</html>

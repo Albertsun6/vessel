@@ -31,7 +31,7 @@ jobs:
         run: pnpm dep-cruiser:check
 
       - name: Frontend TypeScript build
-        run: pnpm --filter @claude-web/frontend build
+        run: pnpm --filter @vessel/frontend build
 
       # M2 Loop 7: backend regression + e2e tests in CI gate.
       # Each test is its own step so GHA UI shows pass/fail granularly.
@@ -39,22 +39,22 @@ jobs:
       # so no /home/runner persistent state pollution.
       # better-sqlite3 native binding rebuilds on ubuntu via pnpm install above.
       - name: Backend harness schema test (Phase 1-7, Loop 6 charter)
-        run: pnpm --filter @claude-web/backend test:harness-schema
+        run: pnpm --filter @vessel/backend test:harness-schema
 
       - name: Backend scheduler orphan cleanup test (F + Loop 6 charter)
-        run: pnpm --filter @claude-web/backend test:scheduler-cleanup
+        run: pnpm --filter @vessel/backend test:scheduler-cleanup
 
       - name: Backend scheduler failed reasons test (Loop 2 distribution)
-        run: pnpm --filter @claude-web/backend test:scheduler-failed-reasons
+        run: pnpm --filter @vessel/backend test:scheduler-failed-reasons
 
       - name: Backend e2e happy-path test (Loop 4)
-        run: pnpm --filter @claude-web/backend test:e2e-pipeline
+        run: pnpm --filter @vessel/backend test:e2e-pipeline
 
       - name: Backend e2e failure-path test (Loop 5)
-        run: pnpm --filter @claude-web/backend test:e2e-failures
+        run: pnpm --filter @vessel/backend test:e2e-failures
 
       - name: Backend update-check unit tests
-        run: pnpm --filter @claude-web/backend test:update-check
+        run: pnpm --filter @vessel/backend test:update-check
 
       - name: Protocol sync check
         run: |
