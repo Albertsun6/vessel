@@ -1,6 +1,6 @@
 # Vessel Backlog
 
-**最近更新**: 2026-05-14T15:30:00Z
+**最近更新**: 2026-05-19T09:00:00Z
 **Steward 启动仪式**: 见 [`docs/STEWARD_PROMPTS.md`](STEWARD_PROMPTS.md) 或 [`docs/STEWARD_USAGE.md`](STEWARD_USAGE.md)
 **Schema 契约**: [`docs/adr/vessel/ADR-019-steward-v0-contract.md`](adr/vessel/ADR-019-steward-v0-contract.md)
 **Source-of-truth**: 本文件是唯一写入点（I1）；`status` 字段是状态唯一权威（I10）；section header 仅人眼导航
@@ -10,17 +10,7 @@
 ## Active (planned / in_progress)
 
 ```yaml
-items:
-  - id: m2-voice-proposal
-    title: M2-Voice Capability 设计提案
-    priority: P2
-    size: M
-    status: planned
-    assigned_kind: main
-    parallel_safe_files: ["docs/proposals/"]
-    depends_on: []
-    note: "调研 whisper-large > 500MB 走 worker subprocess (ADR-012)；写到 docs/proposals/M2-VOICE-CAPABILITY.md；可并行候选"
-
+items: []
 ```
 
 ---
@@ -76,6 +66,13 @@ items:
 
 ```yaml
 items:
+  - id: m2-voice-proposal
+    title: M2-Voice Capability 设计提案 + 统一 ASR provider 链实现
+    status: done
+    completed_at: 2026-05-19T09:00:00Z
+    refs: ["pr:#91", "pr:#92", "commit:dc265de", "proposal:docs/proposals/M2-VOICE-CAPABILITY.md"]
+    note: "超出原 scope：不止写提案，还实现并 ship 了统一 ASR 抽象（packages/backend/src/asr/，groq→iflytek→whisper-cpp 自动降级链）。三家实测对比：Groq whisper-large-v3 ~0.8s 最准选主力；讯飞全产品线不适配短语音低延迟（IAT ~8s 流式 / 极速 ~20s 官方文档）留 IAT 兜底；本地 whisper 最后兜底。PR #91 实现 + PR #92 提案文档均合入 main。.env 已配 Groq+讯飞 key（gitignore 保护）"
+
   - id: intent-classifier-v1
     title: Intent Classifier v1 (M2-intent-v1)
     status: done
