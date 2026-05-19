@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人单机 multi-agent 并行开发协调方案评估</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.14.1/cdn.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  body { font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; }
+  .pill-ok { display: inline-flex; align-items: center; background: #dcfce7; color: #166534; border: 1px solid #86efac; border-radius: 9999px; padding: 1px 10px; font-size: 11px; font-weight: 600; }
+  .pill-warn { display: inline-flex; align-items: center; background: #fef9c3; color: #854d0e; border: 1px solid #fde047; border-radius: 9999px; padding: 1px 10px; font-size: 11px; font-weight: 600; }
+  .pill-muted { display: inline-flex; align-items: center; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 9999px; padding: 1px 10px; font-size: 11px; font-weight: 600; }
+  .pill-blue { display: inline-flex; align-items: center; background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; border-radius: 9999px; padding: 1px 10px; font-size: 11px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f9fafb; font-weight: 600; font-size: 12px; color: #374151; text-align: left; padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; font-size: 13px; vertical-align: top; }
+  tr:hover td { background: #f9fafb; }
+  .toc a { color: #374151; text-decoration: none; font-size: 13px; }
+  .toc a:hover { color: #111827; }
+  .toc a.active { color: #1d4ed8; font-weight: 600; }
+  @media print { .no-print { display: none; } }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-900" x-data="{ activeSection: 'q' }">
+
+<!-- Sticky header -->
+<header class="bg-white border-b border-gray-200 sticky top-0 z-20 no-print">
+  <div class="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+    <div class="flex-1 min-w-0">
+      <h1 class="text-sm font-semibold truncate">个人单机 multi-agent 并行开发协调方案评估</h1>
+      <div class="flex gap-2 mt-1 flex-wrap">
+        <span class="pill-ok">结论：方向正确</span>
+        <span class="pill-warn">3 处改进建议</span>
+        <span class="pill-blue">置信度：高</span>
+        <span class="pill-muted">2026-05-19</span>
+        <span class="pill-muted">2 Claude + cursor-agent GPT-5.5</span>
+      </div>
+    </div>
+    <button onclick="window.print()" class="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 shrink-0">打印</button>
+  </div>
+</header>
+
+<div class="max-w-6xl mx-auto px-6 py-8 flex gap-8">
+
+  <!-- TOC sidebar -->
+  <aside class="w-52 shrink-0 hidden lg:block no-print">
+    <nav class="sticky top-20 toc space-y-1">
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">目录</div>
+      <a href="#q" class="block py-1 px-2 rounded hover:bg-gray-100">研究问题</a>
+      <a href="#matrix" class="block py-1 px-2 rounded hover:bg-gray-100">方案对比矩阵</a>
+      <a href="#rec" class="block py-1 px-2 rounded hover:bg-gray-100">推荐结论</a>
+      <a href="#keep" class="block py-1 px-2 rounded hover:bg-gray-100">合理之处（保留）</a>
+      <a href="#improve" class="block py-1 px-2 rounded hover:bg-gray-100">3 处改进建议</a>
+      <a href="#alt" class="block py-1 px-2 rounded hover:bg-gray-100">可选替代路径</a>
+      <a href="#risks" class="block py-1 px-2 rounded hover:bg-gray-100">待验证风险</a>
+      <a href="#sources" class="block py-1 px-2 rounded hover:bg-gray-100">主要来源</a>
+      <a href="#meta" class="block py-1 px-2 rounded hover:bg-gray-100">调研 Metadata</a>
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <main class="flex-1 min-w-0 space-y-6">
+
+    <!-- Research question -->
+    <section id="q" class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-base font-semibold mb-3">研究问题</h2>
+      <p class="text-sm text-gray-700 leading-relaxed">在个人单机 Claude Code 并行开发场景下，现有 <span class="mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">git worktree + Steward + eva.json + file-flag</span> 完成信号方案是否合理？有没有更低开销、更高可靠性的替代或改进方式？</p>
+      <div class="mt-4 grid grid-cols-5 gap-2">
+        <div class="bg-gray-50 rounded-lg p-2 text-center text-xs"><div class="font-medium">隔离可靠性</div></div>
+        <div class="bg-gray-50 rounded-lg p-2 text-center text-xs"><div class="font-medium">协调开销</div></div>
+        <div class="bg-gray-50 rounded-lg p-2 text-center text-xs"><div class="font-medium">冲突检测</div></div>
+        <div class="bg-gray-50 rounded-lg p-2 text-center text-xs"><div class="font-medium">完成信号</div></div>
+        <div class="bg-gray-50 rounded-lg p-2 text-center text-xs"><div class="font-medium">单人适配</div></div>
+      </div>
+    </section>
+
+    <!-- Verdict banner -->
+    <section id="rec" class="bg-green-50 border border-green-200 rounded-xl p-5">
+      <div class="flex items-start gap-3">
+        <div class="text-2xl shrink-0">✅</div>
+        <div>
+          <div class="font-semibold text-green-900 mb-1">结论：当前方案方向正确，核心架构无需重建</div>
+          <p class="text-sm text-green-800 leading-relaxed">git worktree + Steward + BACKLOG.md 与个人本地 AI coding tool 的 2025–2026 业界共识高度吻合。有 <strong>3 处点状改进</strong>（P1 极低成本、强烈建议），以及 1 个轻量替代候选（claude-squad）。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Comparison matrix -->
+    <section id="matrix" class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-base font-semibold mb-4">方案对比矩阵</h2>
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>方案</th>
+              <th>隔离可靠性</th>
+              <th>协调开销</th>
+              <th>冲突检测</th>
+              <th>完成信号</th>
+              <th>单人适配</th>
+              <th>综合</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="bg-blue-50">
+              <td class="font-medium">当前：worktree + eva.json + file-flag</td>
+              <td>4 <span class="text-xs text-gray-500">文件隔离✓，运行时手动补</span></td>
+              <td><strong>4 ✓</strong></td>
+              <td>3 <span class="text-xs text-gray-500">owns 手动声明</span></td>
+              <td>3 <span class="text-xs text-orange-600">file-flag 有半写入风险</span></td>
+              <td><strong>5 ✓</strong></td>
+              <td><span class="pill-blue">3.8</span></td>
+            </tr>
+            <tr>
+              <td>branch-only（无 worktree）</td>
+              <td>2 <span class="text-xs text-red-500">共享 working dir</span></td>
+              <td><strong>5 ✓</strong></td>
+              <td>1</td>
+              <td>3</td>
+              <td>4</td>
+              <td><span class="pill-muted">3.0</span></td>
+            </tr>
+            <tr>
+              <td>container（Docker per agent）</td>
+              <td><strong>5 ✓</strong></td>
+              <td>1 <span class="text-xs text-red-500">分钟级 spin-up</span></td>
+              <td>3</td>
+              <td>4</td>
+              <td>2</td>
+              <td><span class="pill-muted">3.0</span></td>
+            </tr>
+            <tr class="bg-green-50">
+              <td>改进：worktree + SQLite + 进程退出信号</td>
+              <td>4</td>
+              <td>3</td>
+              <td><strong>4 ✓</strong></td>
+              <td><strong>5 ✓</strong></td>
+              <td>4</td>
+              <td><span class="pill-ok">4.0</span></td>
+            </tr>
+            <tr class="bg-green-50">
+              <td>claude-squad（worktree + tmux TUI）</td>
+              <td>4</td>
+              <td><strong>5 ✓</strong></td>
+              <td>3</td>
+              <td>4</td>
+              <td><strong>5 ✓</strong></td>
+              <td><span class="pill-ok">4.2</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">✓ 该维度最优　评分 1–5　综合为简单均值</p>
+    </section>
+
+    <!-- What's good -->
+    <section id="keep" class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-base font-semibold mb-4">合理之处（保留）</h2>
+      <div class="space-y-4">
+        <div class="border-l-2 border-green-400 pl-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm">1. git worktree-per-agent 是本地工具主流选择</span>
+            <span class="pill-ok">置信度：高</span>
+          </div>
+          <p class="text-sm text-gray-600">Claude Code（官方 <span class="mono text-xs bg-gray-100 px-1 py-0.5 rounded">isolation: worktree</span>）、Cursor 3.2（Agents Window）均收敛到 worktree 作为本地隔离原语。</p>
+          <p class="text-xs text-amber-700 mt-1 bg-amber-50 px-2 py-1 rounded">⚠️ 注意：这是<strong>本地 IDE/CLI agent</strong>的收敛。云 agent（GitHub Copilot、OpenHands 云端、Google Jules）用 branch + ephemeral/container workspace，并非 worktree。</p>
+        </div>
+        <div class="border-l-2 border-green-400 pl-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm">2. BACKLOG.md + Steward I11 协议是设计亮点</span>
+            <span class="pill-ok">置信度：高</span>
+          </div>
+          <p class="text-sm text-gray-600">业界共识：spec-driven 任务分解质量 > 协调机制复杂度（Augment Code、CAID 论文双重验证）。I11 强制人工拍板 dispatch，与此完全吻合。<strong>不建议拆除。</strong></p>
+        </div>
+        <div class="border-l-2 border-green-400 pl-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-medium text-sm">3. eva.json JSON 注册表对当前单用户够用</span>
+            <span class="pill-warn">置信度：中高</span>
+          </div>
+          <p class="text-sm text-gray-600">低并发（≤3 worker）+ atomic-rename write + promise-queue write lock → JSON 足够。SQLite WAL 无边际收益。</p>
+          <p class="text-xs text-gray-400 mt-1">注：这是基于当前项目负载的工程判断，非来源直接证明。SQLite 官方说 "low writer concurrency is ok" 但未给出具体 worker 阈值。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Improvements -->
+    <section id="improve" class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-base font-semibold mb-4">3 处改进建议</h2>
+      <div class="space-y-4">
+
+        <div class="border border-red-200 bg-red-50 rounded-xl p-5">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded">P1</span>
+            <span class="font-semibold">完成信号加 git commit 辅证</span>
+            <span class="pill-muted">成本：极低</span>
+            <span class="pill-ok">强烈建议</span>
+          </div>
+          <p class="text-sm text-gray-700 mb-2">当前 <span class="mono text-xs bg-white px-1 rounded border">~/.vessel/spawn-done/&lt;id&gt;.json</span> 是 file-flag，有已知失效模式（fsnotify 社区：rename/半写入/coalesce 事件丢失）。Anthropic 自己的 C 编译器工程案例：agent 完成 = git push，file-lock 删除是附产物。</p>
+          <div class="bg-white rounded-lg p-3 border border-red-100">
+            <div class="text-xs font-medium text-gray-500 mb-1">改进方式</div>
+            <p class="text-sm"><span class="mono text-xs bg-gray-100 px-1 rounded">steward-signal-done.sh</span> 写 spawn-done JSON 时，同时 verify <span class="mono text-xs bg-gray-100 px-1 rounded">git log --oneline -1</span> 有新 commit（或 PR URL 已填）。信号升为 <strong>file + verifiable artifact（git commit）</strong>。</p>
+          </div>
+        </div>
+
+        <div class="border border-yellow-200 bg-yellow-50 rounded-xl p-5">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-yellow-500 text-white text-xs font-bold px-2 py-0.5 rounded">P2</span>
+            <span class="font-semibold">端口自动分配</span>
+            <span class="pill-muted">成本：低</span>
+          </div>
+          <p class="text-sm text-gray-700 mb-2">当前 <span class="mono text-xs bg-white px-1 rounded border">.env.local</span> 手动写 PORT，忘写会导致 backend 端口冲突。改为 eva.json 注册时按分支名哈希生成端口：<span class="mono text-xs bg-white px-1 rounded border">3033 + abs(hash(branch_name)) % 10</span>。Augment Code 和 Upsun 均记录了端口哈希分配模式。</p>
+        </div>
+
+        <div class="border border-gray-200 bg-gray-50 rounded-xl p-5">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="bg-gray-500 text-white text-xs font-bold px-2 py-0.5 rounded">P3</span>
+            <span class="font-semibold">冲突预检自动化</span>
+            <span class="pill-muted">成本：中，可选</span>
+          </div>
+          <p class="text-sm text-gray-700"><span class="mono text-xs bg-white px-1 rounded border">开始干 &lt;id&gt;</span> 时，自动跑 <span class="mono text-xs bg-white px-1 rounded border">git diff --name-only HEAD..origin/dev</span> + 与 <span class="mono text-xs bg-white px-1 rounded border">owns</span> 字段做 intersection，有重叠时标红警告。当前只靠 owns 字段人工维护，无自动比对。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Alternative -->
+    <section id="alt" class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-base font-semibold mb-3">可选替代路径</h2>
+      <div class="flex gap-4 items-start">
+        <div class="flex-1">
+          <div class="font-medium mb-1"><a href="https://github.com/smtg-ai/claude-squad" class="text-blue-700 hover:underline">claude-squad</a>（git worktree + tmux TUI）</div>
+          <p class="text-sm text-gray-600">零额外配置体验，支持 Claude Code/Codex/Gemini/Aider 多 agent，2025–2026 持续活跃（最新 commit 2026-05-18）。</p>
+          <p class="text-sm text-gray-500 mt-1"><strong>迁移收益有限</strong>：Vessel 有 iOS native + Tailscale + 个人化 Steward 协议，这些 claude-squad 没有。可作为 worktree 管理层替代，但不解决上层协调问题。</p>
+        </div>
+        <div class="shrink-0">
+          <span class="pill-warn">AGPL-3.0 ⚠️</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Risks -->
+    <section id="risks" class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-base font-semibold mb-4">待验证风险</h2>
+      <div class="space-y-2">
+        <label class="flex gap-3 items-start p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+          <input type="checkbox" class="mt-0.5 shrink-0">
+          <span class="text-sm"><strong>file-flag atomic write（macOS APFS）</strong>：<span class="mono text-xs">spawn-done/&lt;id&gt;.json</span> 是否用 atomic rename？高并发写入在 M1/M2 上是否有实测半写入数据。</span>
+        </label>
+        <label class="flex gap-3 items-start p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+          <input type="checkbox" class="mt-0.5 shrink-0">
+          <span class="text-sm"><strong>eva.json concurrent write 保护</strong>：<span class="mono text-xs">projects-store.ts</span> 有 promise-queue lock，eva.json 本身是否有等价保护？2 个 worker 同时注册 worktree 是否会丢数据。</span>
+        </label>
+        <label class="flex gap-3 items-start p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+          <input type="checkbox" class="mt-0.5 shrink-0">
+          <span class="text-sm"><strong>claude-squad AGPL-3.0 license</strong>：集成或改造时需单独评估合规成本。<a href="https://api.github.com/repos/smtg-ai/claude-squad" class="text-blue-600 text-xs">GitHub API</a></span>
+        </label>
+        <label class="flex gap-3 items-start p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+          <input type="checkbox" class="mt-0.5 shrink-0">
+          <span class="text-sm"><strong>claude-squad 上游 CLI 兼容性</strong>：v1.0.17 match Claude CLI 文案（trust prompt/MCP），Claude Code changelog 持续变更交互层。需版本锁定 + 回归测试。<a href="https://github.com/smtg-ai/claude-squad/releases/tag/v1.0.17" class="text-blue-600 text-xs">v1.0.17 release</a></span>
+        </label>
+        <label class="flex gap-3 items-start p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+          <input type="checkbox" class="mt-0.5 shrink-0">
+          <span class="text-sm"><strong>Cursor /multitask 本地/云边界</strong>：Agents Window 是否支持完全 local 运行（vs cloud-only）？<a href="https://cursor.com/changelog/04-24-26" class="text-blue-600 text-xs">Cursor 3.2 Changelog</a></span>
+        </label>
+        <label class="flex gap-3 items-start p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+          <input type="checkbox" class="mt-0.5 shrink-0">
+          <span class="text-sm"><strong>GitHub Copilot / OpenHands 隔离对比</strong>：两者用 ephemeral/container workspace 而非 worktree，实际隔离级别对比需独立验证。</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Sources -->
+    <section id="sources" class="bg-white rounded-xl border border-gray-200 p-6">
+      <h2 class="text-base font-semibold mb-4">主要来源</h2>
+      <div class="space-y-2">
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2 border-b border-gray-50">
+          <div><a href="https://code.claude.com/docs/en/worktrees" class="text-blue-700 hover:underline text-sm font-medium">Claude Code 官方 worktree 文档</a><p class="text-xs text-gray-500 mt-0.5">isolation: worktree subagent flag、.worktreeinclude、自动清理</p></div>
+          <span class="pill-ok shrink-0">High</span>
+        </div>
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2 border-b border-gray-50">
+          <div><a href="https://www.anthropic.com/engineering/building-c-compiler" class="text-blue-700 hover:underline text-sm font-medium">Anthropic Engineering: Building a C Compiler with Claude</a><p class="text-xs text-gray-500 mt-0.5">file-lock + git commit 完成信号的一手工程案例</p></div>
+          <span class="pill-ok shrink-0">High</span>
+        </div>
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2 border-b border-gray-50">
+          <div><a href="https://arxiv.org/html/2603.21489" class="text-blue-700 hover:underline text-sm font-medium">CAID Paper (Princeton NLP, arxiv 2603.21489)</a><p class="text-xs text-gray-500 mt-0.5">git worktree + branch-merge + structured JSON 协调，PaperBench +26.7%</p></div>
+          <span class="pill-ok shrink-0">High</span>
+        </div>
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2 border-b border-gray-50">
+          <div><a href="https://dev.to/minnzen/building-a-durable-message-queue-on-sqlite-for-ai-agent-orchestration-335m" class="text-blue-700 hover:underline text-sm font-medium">Building a Durable MQ on SQLite for AI Agent Orchestration</a><p class="text-xs text-gray-500 mt-0.5">SQLite WAL atomic claim + visibility timeout vs file-flag</p></div>
+          <span class="pill-ok shrink-0">High</span>
+        </div>
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2 border-b border-gray-50">
+          <div><a href="https://github.com/smtg-ai/claude-squad" class="text-blue-700 hover:underline text-sm font-medium">claude-squad GitHub</a><p class="text-xs text-gray-500 mt-0.5">git worktree + tmux TUI 多 agent 管理，2025-2026 活跃</p></div>
+          <span class="pill-ok shrink-0">High</span>
+        </div>
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2 border-b border-gray-50">
+          <div><a href="https://www.penligent.ai/hackinglabs/git-worktrees-need-runtime-isolation-for-parallel-ai-agent-development/" class="text-blue-700 hover:underline text-sm font-medium">git worktree needs runtime isolation (penligent)</a><p class="text-xs text-gray-500 mt-0.5">五大运行时隔离盲区（端口/DB/env/browser/日志），端口冲突实证</p></div>
+          <span class="pill-ok shrink-0">High</span>
+        </div>
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2 border-b border-gray-50">
+          <div><a href="https://cursor.com/changelog/04-24-26" class="text-blue-700 hover:underline text-sm font-medium">Cursor 3.2 Changelog (2026-04-24)</a><p class="text-xs text-gray-500 mt-0.5">/multitask async subagents + worktrees，Agents Window 并行支持</p></div>
+          <span class="pill-ok shrink-0">High</span>
+        </div>
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2 border-b border-gray-50">
+          <div><a href="https://www.augmentcode.com/guides/git-worktrees-parallel-ai-agent-execution" class="text-blue-700 hover:underline text-sm font-medium">Augment Code: git worktrees parallel AI agent execution</a><p class="text-xs text-gray-500 mt-0.5">端口哈希分配 + verifier agent + 5-7 agents/machine 实测上限</p></div>
+          <span class="pill-ok shrink-0">High</span>
+        </div>
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2 border-b border-gray-50">
+          <div><a href="https://arxiv.org/pdf/2601.13295" class="text-blue-700 hover:underline text-sm font-medium">CooperBench (arxiv 2601.13295)</a><p class="text-xs text-gray-500 mt-0.5">agent 协作需 scaffold 才可靠，2025-01 学术验证</p></div>
+          <span class="pill-ok shrink-0">High</span>
+        </div>
+        <div class="grid grid-cols-[1fr,auto] gap-4 items-start py-2">
+          <div><a href="https://github.com/fsnotify/fsnotify/issues/372" class="text-blue-700 hover:underline text-sm font-medium">fsnotify issues #372</a><p class="text-xs text-gray-500 mt-0.5">file watcher 半写入/rename/coalesce 失效模式，2021–2026 持续引用</p></div>
+          <span class="pill-warn shrink-0">Medium</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Metadata (collapsible) -->
+    <section id="meta">
+      <details class="bg-white rounded-xl border border-gray-200">
+        <summary class="px-6 py-4 cursor-pointer font-medium text-sm select-none hover:bg-gray-50 rounded-xl">调研 Metadata（Phase 2.5 / 5.5 / 6 辩论历史）</summary>
+        <div class="px-6 pb-6 pt-2 space-y-4 text-sm">
+
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs font-medium text-gray-500 mb-1">调研模式</div>
+              <div>2 Claude + 1 cursor-agent(GPT-5.5-medium) 异构并行，无降级</div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs font-medium text-gray-500 mb-1">Phase 6 辩论</div>
+              <div>Round 1 Refine → Round 2 收敛（双方同档）<br><span class="text-green-700 font-medium">无需 Round 3 / 人类裁决</span></div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs font-medium text-gray-500 mb-1">Phase 5.5 Citation Health</div>
+              <div>Layer A: 10/10 ok <span class="pill-ok">PASS</span><br>Layer B: 4 supported + 1 partial <span class="pill-ok">PASS</span></div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-3">
+              <div class="text-xs font-medium text-gray-500 mb-1">Phase 2.5 Reflection</div>
+              <div>5/5 子问题覆盖，High source ≥60%，追搜：No</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs font-medium text-gray-500 mb-2">Phase 6 Round 1 判断矩阵</div>
+            <table class="text-xs">
+              <thead><tr><th>建议</th><th>立场</th><th>论据</th></tr></thead>
+              <tbody>
+                <tr><td>补 Agent X Inventory（压缩格式）</td><td><span class="pill-warn">partial→accept R2</span></td><td>DeepTRACE 审计深度论证说服，压缩表格入 metadata</td></tr>
+                <tr><td>收窄"全部采用 worktree"表述</td><td><span class="pill-ok">accept</span></td><td>Copilot/OpenHands 用 ephemeral/container，URL 证据充分</td></tr>
+                <tr><td>claude-squad AGPL-3.0 风险</td><td><span class="pill-ok">accept</span></td><td>GitHub API 确认，合规风险真实</td></tr>
+                <tr><td>claude-squad 上游兼容性风险</td><td><span class="pill-warn">partial→accept R2</span></td><td>v1.0.17 match CLI 文案证据充分</td></tr>
+                <tr><td>Cursor /multitask 本地边界</td><td><span class="pill-ok">accept</span></td><td>changelog 不能证明 local parity</td></tr>
+                <tr><td>Q3/Q4 ≤3 workers 标工程判断</td><td><span class="pill-warn">partial+caveat</span></td><td>R2 cursor-agent 撤回，双方同档</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <div class="text-xs font-medium text-gray-500 mb-2">Agent X 独有发现（Claude 未搜到）</div>
+            <table class="text-xs">
+              <thead><tr><th>Source</th><th>关键发现</th><th>采纳</th></tr></thead>
+              <tbody>
+                <tr><td><a href="https://github.com/justin-schroeder/dmux" class="text-blue-600">dmux</a></td><td>本地 dev agent multiplexer，围绕 worktree + 多 agent</td><td>纳入可选替代</td></tr>
+                <tr><td><a href="https://github.com/daintreehq/daintree" class="text-blue-600">daintree</a></td><td>聚焦 Claude/Gemini/Codex 多 session + context 注入</td><td>纳入可选替代</td></tr>
+                <tr><td><a href="https://github.com/fsnotify/fsnotify/issues/372" class="text-blue-600">fsnotify #372</a></td><td>file watcher 失效模式一手记录</td><td>采纳（支持 P1）</td></tr>
+                <tr><td>SQLite WAL 官方文档</td><td>一 writer 限制 + 低并发场景适用性</td><td>采纳（支持 eva.json 继续使用）</td></tr>
+                <tr><td><a href="https://jules.google/docs/" class="text-blue-600">Google Jules</a></td><td>VM clone + 异步执行，非 worktree</td><td>采纳（收窄"全部 worktree"表述）</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </details>
+    </section>
+
+  </main>
+</div>
+
+<footer class="border-t border-gray-200 mt-8 py-5 text-center text-xs text-gray-400">
+  /survey 调研报告 · 个人单机 multi-agent 并行开发协调方案评估 · 2026-05-19
+</footer>
+
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+</body>
+</html>
