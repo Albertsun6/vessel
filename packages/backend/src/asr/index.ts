@@ -6,7 +6,10 @@ import type { AsrClient, TranscribeOptions } from "./types.js";
 export type { AsrClient, TranscribeOptions };
 export { resolveWhisperModel } from "./whisper-cpp.js";
 
-// Priority: iflytek → groq → whisper-cpp
+// Priority: groq → iflytek → whisper-cpp
+//   groq        — whisper-large-v3, ~0.7s, most accurate (primary)
+//   iflytek     — IAT streaming, ~8s, China-region fallback if Groq unreachable
+//   whisper-cpp — local, ~5s cold start, last-resort offline
 // Set ASR_PROVIDER=iflytek|groq|whisper-cpp to pin a single provider.
 // Default (auto): add all configured providers in priority order.
 function buildChain(): AsrClient[] {
@@ -38,8 +41,8 @@ function buildChain(): AsrClient[] {
   }
 
   const chain: AsrClient[] = [];
-  if (iflytekOk) chain.push(new IflytekAsrClient(IFLYTEK_APPID!, IFLYTEK_API_KEY!, IFLYTEK_API_SECRET!));
   if (groqOk) chain.push(new GroqAsrClient(GROQ_API_KEY!));
+  if (iflytekOk) chain.push(new IflytekAsrClient(IFLYTEK_APPID!, IFLYTEK_API_KEY!, IFLYTEK_API_SECRET!));
   chain.push(new WhisperCppClient());
 
   const names = chain.map((c) => c.name).join(" → ");
