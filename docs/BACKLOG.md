@@ -1,6 +1,6 @@
 # Vessel Backlog
 
-**最近更新**: 2026-05-14T15:30:00Z
+**最近更新**: 2026-05-19T18:00:00Z
 **Steward 启动仪式**: 见 [`docs/STEWARD_PROMPTS.md`](STEWARD_PROMPTS.md) 或 [`docs/STEWARD_USAGE.md`](STEWARD_USAGE.md)
 **Schema 契约**: [`docs/adr/vessel/ADR-019-steward-v0-contract.md`](adr/vessel/ADR-019-steward-v0-contract.md)
 **Source-of-truth**: 本文件是唯一写入点（I1）；`status` 字段是状态唯一权威（I10）；section header 仅人眼导航
@@ -192,4 +192,11 @@ items:
     completed_at: 2026-05-13T08:53:00Z
     refs: ["pr:#68", "tag:aisep-bootstrap-merged-2026-05-13", "commit:b31e341"]
     note: "43 commits 合入 dev：6 个 @vessel/aisep-* TypeScript 包 (protocol/core/workspace/agents/memory/cli) + aisep-protocol@0.3.0 wire format + Pilot-10b 10/10 真业务 dogfood + 334 tests 0 dep-cruiser violations + F1/F2/F6 (claude --print timeout + burst-limit retry)。Phase 2.F 残留 F3/F4/F5 (timeout retry / incremental render hint / cli --help smoke test) 单独 backlog；v2 fan-in proposal target 2026-06。rebase 期间统一 namespace @claude-web/aisep-* → @vessel/aisep-* 跟 PR #39 Vessel kernel 对齐。"
+
+  - id: steward-v06-contract-debt
+    title: Steward V0.6 契约债 — mirror + validate + status 三件套
+    status: done
+    completed_at: 2026-05-19T18:00:00Z
+    refs: ["ci:.github/workflows/ci.yml"]
+    note: "scripts/lib/steward-backlog.mjs + steward-mirror.mjs + steward-validate.mjs + steward-status.mjs；pnpm steward:{validate,mirror,status}；CI steward:validate gate。待办：eva:reconcile worktree 漂移 (P1)"
 ```

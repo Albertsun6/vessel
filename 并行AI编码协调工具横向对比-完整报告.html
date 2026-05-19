@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>并行 AI 编码协调工具横向对比评估</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .pill-ok { @apply inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800; }
+  .pill-warn { @apply inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800; }
+  .pill-muted { @apply inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600; }
+  #toc a { display: block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; color: #374151; text-decoration: none; }
+  #toc a:hover, #toc a.active { background: #e5e7eb; color: #111827; }
+  .score-cell { font-weight: 600; }
+  .score-best { background: #d1fae5; }
+  tr:hover td { background: #f9fafb; }
+  th { position: sticky; top: 0; background: white; z-index: 1; }
+  details > summary { cursor: pointer; user-select: none; }
+  @media print { #sticky-bar { position: static; } #toc { display: none; } }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-800" x-data="{ activeSection: '' }" x-init="
+  mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if(e.isIntersecting) activeSection = e.target.id; });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  document.querySelectorAll('h2[id]').forEach(h => obs.observe(h));
+">
+
+<!-- Sticky Top Bar -->
+<div id="sticky-bar" class="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+  <div class="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between flex-wrap gap-2">
+    <div class="flex items-center gap-3">
+      <span class="font-bold text-gray-900 text-sm">并行 AI 编码协调工具横向对比评估</span>
+      <span class="pill-ok">中高置信度</span>
+      <span class="pill-muted">2026-05-19</span>
+      <span class="pill-muted">25 来源</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-gray-500">Phase 6 Round 2 收敛 · /survey</span>
+      <button onclick="window.print()" class="text-xs px-3 py-1 rounded border border-gray-300 hover:bg-gray-100">打印</button>
+    </div>
+  </div>
+</div>
+
+<div class="max-w-7xl mx-auto px-4 py-6 flex gap-6">
+
+  <!-- Left TOC -->
+  <aside id="toc" class="hidden lg:block w-52 flex-shrink-0">
+    <div class="sticky top-16 space-y-1">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-2">目录</p>
+      <a href="#research-question" :class="activeSection === 'research-question' ? 'active' : ''">研究问题</a>
+      <a href="#tool-overview" :class="activeSection === 'tool-overview' ? 'active' : ''">工具全景概览</a>
+      <a href="#dimensions" :class="activeSection === 'dimensions' ? 'active' : ''">评估维度</a>
+      <a href="#comparison" :class="activeSection === 'comparison' ? 'active' : ''">方案对比矩阵</a>
+      <a href="#findings" :class="activeSection === 'findings' ? 'active' : ''">核心发现</a>
+      <a href="#recommendation" :class="activeSection === 'recommendation' ? 'active' : ''">推荐</a>
+      <a href="#risks" :class="activeSection === 'risks' ? 'active' : ''">待验证风险</a>
+      <a href="#sources" :class="activeSection === 'sources' ? 'active' : ''">主要来源</a>
+      <a href="#metadata" :class="activeSection === 'metadata' ? 'active' : ''">调研 Metadata</a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 min-w-0 space-y-8">
+
+    <!-- Research Question -->
+    <section>
+      <h2 id="research-question" class="text-xl font-bold text-gray-900 mb-3 pb-2 border-b">研究问题</h2>
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+        <p>Vessel 自研并行开发协调方案（git worktree + eva.json + BACKLOG.md + 文件 flag 完成信号 + Steward I11 dispatch）与 claude-squad、workmux、dmux、uzi、Seshions、ccmanager、Nimbalyst、VibeTree 等工具横向对比，评估架构设计、完成信号可靠性、单人认知负担、冲突检测、可扩展性五个维度，明确 Vessel 自研路线的合理性和待补设计。</p>
+      </div>
+    </section>
+
+    <!-- Tool Overview -->
+    <section>
+      <h2 id="tool-overview" class="text-xl font-bold text-gray-900 mb-4 pb-2 border-b">工具全景概览</h2>
+      <div class="grid gap-3">
+        <!-- Claude-squad -->
+        <div class="bg-white rounded-lg border p-4">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="font-semibold text-gray-900">claude-squad</span>
+            <div class="flex gap-1 flex-wrap">
+              <span class="pill-ok">v1.0.17 2026-03</span>
+              <span class="pill-ok">多模型</span>
+            </div>
+          </div>
+          <p class="text-sm text-gray-600">tmux session + git worktree 一体化。TUI 导航/commit/push。<strong>无端口分配</strong>（Issue #260），<strong>无结构化完成事件</strong>，依赖人工观察 TUI 或实验性 <code>--autoyes</code>。</p>
+        </div>
+        <!-- workmux -->
+        <div class="bg-white rounded-lg border p-4">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="font-semibold text-gray-900">workmux</span>
+            <div class="flex gap-1 flex-wrap">
+              <span class="pill-ok">Rust 2026-05</span>
+              <span class="pill-ok">完成信号最优</span>
+            </div>
+          </div>
+          <p class="text-sm text-gray-600">Claude Code hook → 状态文件三态（Working/Waiting/Done）。<code>--wait</code> flag 阻塞等待。Dashboard TUI + sidebar，多终端+多模型。设计思路与 Vessel 文件 flag 同构，工具化程度更高。</p>
+        </div>
+        <!-- dmux -->
+        <div class="bg-white rounded-lg border p-4">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="font-semibold text-gray-900">dmux</span>
+            <span class="pill-ok">2026-05 活跃</span>
+          </div>
+          <p class="text-sm text-gray-600">多 agent + 多项目，智能 merge，文件浏览，macOS 完成通知，Stop detection，PR summary。多模型支持。</p>
+        </div>
+        <!-- uzi -->
+        <div class="bg-white rounded-lg border p-4">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="font-semibold text-gray-900">uzi</span>
+            <span class="pill-muted">Go 2025-06</span>
+          </div>
+          <p class="text-sm text-gray-600">批量并行 + broadcast，port range 管理，<code>uzi auto</code> 处理 trust 提示。面向"多 agent 同时解同一任务取最优"场景。完成信号隐式轮询。</p>
+        </div>
+        <!-- Seshions -->
+        <div class="bg-white rounded-lg border p-4">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="font-semibold text-gray-900">Seshions</span>
+            <span class="pill-muted">2026-02/03</span>
+          </div>
+          <p class="text-sm text-gray-600">Blueprint dispatch + role/group 广播 + 状态面板。专为 1 人管多 agent 降认知负担设计。</p>
+        </div>
+        <!-- ccmanager -->
+        <div class="bg-white rounded-lg border p-4">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="font-semibold text-gray-900">ccmanager</span>
+            <span class="pill-ok">2025-2026</span>
+          </div>
+          <p class="text-sm text-gray-600">无 tmux 依赖，PTY 输出流分析三态检测（Idle/Busy/Waiting），session 历史跨 worktree 复制，自动批准低风险提示。</p>
+        </div>
+        <!-- Nimbalyst -->
+        <div class="bg-white rounded-lg border p-4">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="font-semibold text-gray-900">Nimbalyst</span>
+            <div class="flex gap-1">
+              <span class="pill-ok">2026 SaaS</span>
+              <span class="pill-warn">商业化风险</span>
+            </div>
+          </div>
+          <p class="text-sm text-gray-600">kanban board（backlog/in-progress/reviewing/done）+ iOS 通知 + diff review。认知负担最低——所有工具中可见度最高。</p>
+        </div>
+        <!-- VibeTree -->
+        <div class="bg-white rounded-lg border p-4">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="font-semibold text-gray-900">VibeTree</span>
+            <span class="pill-muted">2025-07 Show HN</span>
+          </div>
+          <p class="text-sm text-gray-600">桌面/浏览器/移动端 app，每 feature 独立 Claude session + git worktree，persistent terminal sessions。"worktree-first workspace substrate"。</p>
+        </div>
+        <!-- Claude Code substrate -->
+        <div class="bg-white rounded-lg border border-blue-200 p-4">
+          <div class="flex items-start justify-between gap-2 mb-1">
+            <span class="font-semibold text-gray-900">Claude Code <code>--worktree</code> substrate</span>
+            <div class="flex gap-1">
+              <span class="pill-ok">官方 2025</span>
+              <span class="pill-warn">仅基础设施层</span>
+            </div>
+          </div>
+          <p class="text-sm text-gray-600">⚠️ 这是 <strong>worktree 基础设施</strong>，不是完整协调层。内置 <code>.worktreeinclude</code>（gitignored 文件自动拷）、WorktreeCreate hook、自动 cleanup。协调逻辑需由上层工具或 Vessel 协议层负责。</p>
+        </div>
+        <!-- Design signals -->
+        <div class="bg-gray-50 rounded-lg border border-dashed p-4">
+          <p class="font-semibold text-gray-700 text-sm mb-1">设计信号（实现尚不成熟）</p>
+          <p class="text-sm text-gray-500"><strong>ccswarm</strong>（Rust, Actor Model）— ParallelExecutor 未接线；<strong>wtx</strong> — reusable worktree pool（复用而非每次新建）；<strong>Agent Hand</strong> — 单源低置信度，可能仅为 session routing 工具</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dimensions -->
+    <section>
+      <h2 id="dimensions" class="text-xl font-bold text-gray-900 mb-3 pb-2 border-b">评估维度</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div class="bg-white rounded border p-3"><span class="font-semibold">架构设计</span><span class="text-gray-500 text-sm ml-2">(25%)</span><p class="text-xs text-gray-500 mt-1">隔离机制、状态管理、任务调度完整性</p></div>
+        <div class="bg-white rounded border p-3"><span class="font-semibold">完成信号可靠性</span><span class="text-gray-500 text-sm ml-2">(25%)</span><p class="text-xs text-gray-500 mt-1">worker 报完可靠性、假完成检测、ack 机制</p></div>
+        <div class="bg-white rounded border p-3"><span class="font-semibold">单人认知负担</span><span class="text-gray-500 text-sm ml-2">(20%)</span><p class="text-xs text-gray-500 mt-1">UI/TUI 层、dispatch 操作数、实时感知</p></div>
+        <div class="bg-white rounded border p-3"><span class="font-semibold">冲突检测与预防</span><span class="text-gray-500 text-sm ml-2">(20%)</span><p class="text-xs text-gray-500 mt-1">文件所有权声明、预检机制、merge 预判</p></div>
+        <div class="bg-white rounded border p-3"><span class="font-semibold">可扩展性</span><span class="text-gray-500 text-sm ml-2">(10%)</span><p class="text-xs text-gray-500 mt-1">多模型、worker 数量、长期可持续</p></div>
+      </div>
+    </section>
+
+    <!-- Comparison Matrix -->
+    <section>
+      <h2 id="comparison" class="text-xl font-bold text-gray-900 mb-3 pb-2 border-b">方案对比矩阵</h2>
+      <div class="overflow-x-auto rounded-lg border bg-white">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b bg-gray-50">
+              <th class="text-left p-3 font-semibold">方案</th>
+              <th class="text-center p-3 font-semibold">架构<br><span class="font-normal text-xs text-gray-400">25%</span></th>
+              <th class="text-center p-3 font-semibold">完成信号<br><span class="font-normal text-xs text-gray-400">25%</span></th>
+              <th class="text-center p-3 font-semibold">认知负担<br><span class="font-normal text-xs text-gray-400">20%</span></th>
+              <th class="text-center p-3 font-semibold">冲突检测<br><span class="font-normal text-xs text-gray-400">20%</span></th>
+              <th class="text-center p-3 font-semibold">可扩展<br><span class="font-normal text-xs text-gray-400">10%</span></th>
+              <th class="text-center p-3 font-semibold">综合</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b bg-blue-50">
+              <td class="p-3 font-semibold text-blue-900">🏠 Vessel 自研</td>
+              <td class="p-3 text-center score-cell">4</td>
+              <td class="p-3 text-center score-cell">3</td>
+              <td class="p-3 text-center score-cell">3</td>
+              <td class="p-3 text-center score-cell score-best">5 ✓</td>
+              <td class="p-3 text-center score-cell">3</td>
+              <td class="p-3 text-center font-bold">3.60</td>
+            </tr>
+            <tr class="border-b">
+              <td class="p-3">claude-squad</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center text-red-600">2</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center text-red-600">1</td>
+              <td class="p-3 text-center score-best">5 ✓</td>
+              <td class="p-3 text-center font-semibold">2.95</td>
+            </tr>
+            <tr class="border-b bg-green-50">
+              <td class="p-3 font-semibold text-green-800">workmux ★</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center score-best">5 ✓</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center">2</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center font-bold text-green-800">3.75</td>
+            </tr>
+            <tr class="border-b">
+              <td class="p-3">dmux</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center">2</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center font-semibold">3.35</td>
+            </tr>
+            <tr class="border-b">
+              <td class="p-3">uzi</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center text-red-600">1</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">2.65</td>
+            </tr>
+            <tr class="border-b">
+              <td class="p-3">Seshions</td>
+              <td class="p-3 text-center text-red-600">2</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center text-red-600">1</td>
+              <td class="p-3 text-center text-red-600">2</td>
+              <td class="p-3 text-center">2.55</td>
+            </tr>
+            <tr class="border-b">
+              <td class="p-3">ccmanager</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center text-red-600">1</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">2.90</td>
+            </tr>
+            <tr class="border-b">
+              <td class="p-3">Nimbalyst</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center score-best">5 ✓</td>
+              <td class="p-3 text-center text-red-600">1</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">3.05</td>
+            </tr>
+            <tr class="border-b">
+              <td class="p-3">VibeTree</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">4</td>
+              <td class="p-3 text-center text-red-600">1</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center">3.05</td>
+            </tr>
+            <tr>
+              <td class="p-3 text-gray-500 text-xs">Claude Code substrate<br><span class="text-gray-400">（仅文件隔离层）</span></td>
+              <td class="p-3 text-center score-best">5 ✓</td>
+              <td class="p-3 text-center">3</td>
+              <td class="p-3 text-center text-red-600">2</td>
+              <td class="p-3 text-center">2</td>
+              <td class="p-3 text-center score-best">5 ✓</td>
+              <td class="p-3 text-center">3.40</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">✓ 该维度最优（可并列）· ★ workmux = 总分最高的外部工具</p>
+    </section>
+
+    <!-- Key Findings -->
+    <section>
+      <h2 id="findings" class="text-xl font-bold text-gray-900 mb-4 pb-2 border-b">核心发现</h2>
+      <div class="space-y-3">
+        <div class="bg-white rounded-lg border-l-4 border-blue-500 p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold">F1：Vessel = 协议化控制平面，非 TUI 编排</span>
+            <span class="pill-ok">高置信度</span>
+          </div>
+          <p class="text-sm text-gray-600">claude-squad/workmux/dmux 的主体是 worktree+tmux+TUI 生命周期管理；Vessel 多了 <code>eva.json</code> 任务注册表、所有权声明、I11 dispatch。两类互补，不是替代关系。</p>
+        </div>
+        <div class="bg-white rounded-lg border-l-4 border-green-500 p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold">F2：Claude Code Stop hook 可自动化 worker 主动调脚本步骤</span>
+            <span class="pill-ok">高置信度</span>
+          </div>
+          <p class="text-sm text-gray-600">Claude Code 在 <code>Stop</code>/<code>PermissionRequest</code>/<code>UserPromptSubmit</code> 触发 hook。workmux 已用此实现三态自动更新。Vessel 目前需 worker 手动调 <code>steward-signal-done.sh</code>，Stop hook 可消除这步。</p>
+        </div>
+        <div class="bg-white rounded-lg border-l-4 border-yellow-500 p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold">F3：冲突检测 Vessel 领先，但 parallel_safe_files 是 work-order 层约束</span>
+            <span class="pill-ok">高置信度</span>
+          </div>
+          <p class="text-sm text-gray-600">业界标准用 <code>git merge-tree</code> 三路预检。Vessel 的声明式文件所有权在调度层约束，不阻止 FS 写入。可进一步加固：spawn 时跑 merge-tree，或 git hooks 在 commit 时拦截。</p>
+        </div>
+        <div class="bg-white rounded-lg border-l-4 border-purple-500 p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold">F4：I11 dispatch 模式符合业界最优认知负担模式</span>
+            <span class="pill-ok">高置信度</span>
+          </div>
+          <p class="text-sm text-gray-600">"每 5-10 分钟异步 check-in"是效率最高工作方式（Addyosmani / htdocs.dev 多来源背书）。Vessel I11 dispatch + <code>pnpm eva:collect</code> 周期收线完全符合 Tier 2 Local Human-in-the-Loop 最优模式。</p>
+        </div>
+        <div class="bg-white rounded-lg border-l-4 border-gray-400 p-4">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="font-semibold">F5：2025-2026 生态重心已转向多模型、跨平台、可视化</span>
+            <span class="pill-ok">高置信度</span>
+          </div>
+          <p class="text-sm text-gray-600">claude-squad 已支持 Codex/Gemini/Aider；workmux/dmux 支持多模型；Nimbalyst/VibeTree 提供 iOS/桌面。Gemini CLI 2025 发布（1M context + 免费）改变了格局。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Recommendation -->
+    <section>
+      <h2 id="recommendation" class="text-xl font-bold text-gray-900 mb-4 pb-2 border-b">推荐</h2>
+      <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+        <p class="font-bold text-green-900 text-lg mb-1">✅ Vessel 自研路线合理 — 不建议迁移到 claude-squad</p>
+        <p class="text-sm text-green-800">冲突预检机制是差异化优势，建议实施 3 项改进（P4-P6）</p>
+        <p class="text-xs text-green-600 mt-1">置信度：中高（25 个有效来源，核心 claim ≥2 独立来源）</p>
+      </div>
+
+      <div class="bg-white rounded-lg border p-4 mb-4">
+        <p class="font-semibold mb-2">理由</p>
+        <ol class="list-decimal list-inside space-y-1 text-sm text-gray-700">
+          <li><code>parallel_safe_files</code> + <code>eva-conflict-check.mjs</code> 是业界独有的冲突预检机制，迁移到 claude-squad 会直接丢失这个优势</li>
+          <li>I11 dispatch（人工拍板）符合 Tier 2 最优认知负担模式，有多来源明确背书</li>
+          <li>claude-squad 核心竞争力在 TUI 可视化，非协议语义，不在同一竞争层面</li>
+          <li>workmux 设计思路与 Vessel 同构，可吸收其 Claude Code Stop hook 而无需整体迁移</li>
+        </ol>
+      </div>
+
+      <div class="space-y-3">
+        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-bold text-red-800">P4（高优先）</span>
+            <span class="pill-warn">接入 Claude Code Stop hook</span>
+          </div>
+          <p class="text-sm text-gray-700">配置 <code>~/.claude/settings.json</code> 的 <code>Stop</code> hook 指向 <code>steward-signal-done.sh $TASK_ID</code>。消除 worker 忘记手动调脚本的风险（当前最弱环节）。实现成本低（配置级），价值高。</p>
+        </div>
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-bold text-yellow-800">P5（中优先）</span>
+            <span class="pill-muted">.env 自动同步到 worktree</span>
+          </div>
+          <p class="text-sm text-gray-700">在 <code>eva.json</code> hooks.post-create 中标准化 <code>.env</code> 文件拷贝逻辑。参考 Claude Code 官方 <code>.worktreeinclude</code> 设计或 claude-squad Issue #260 讨论方案。</p>
+        </div>
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="font-bold text-gray-700">P6（低优先）</span>
+            <span class="pill-muted">PTY-level 三态检测</span>
+          </div>
+          <p class="text-sm text-gray-700">参考 ccmanager PTY 输出流分析或 tmux <code>display-message</code> + window-title 变化，让主线实时感知 worker 三态（Working/Waiting/Done）。</p>
+        </div>
+      </div>
+
+      <div class="mt-4 bg-gray-50 rounded border p-3">
+        <p class="text-sm font-semibold text-gray-700 mb-1">何时应迁移到 claude-squad / workmux</p>
+        <ul class="text-sm text-gray-600 list-disc list-inside space-y-0.5">
+          <li>需要多模型（Codex/Gemini）并行 + TUI 操作界面，且不需要文件级冲突预检</li>
+          <li>维护 eva.json 自定义逻辑成本超过现成工具覆盖收益</li>
+          <li>项目从个人单机转向多人协作</li>
+        </ul>
+        <p class="text-xs text-gray-400 mt-1">⚠️ 本建议仅适用于个人单机 1 人开发者场景</p>
+      </div>
+    </section>
+
+    <!-- Risks -->
+    <section>
+      <h2 id="risks" class="text-xl font-bold text-gray-900 mb-3 pb-2 border-b">待验证风险</h2>
+      <div class="space-y-2">
+        <div class="flex gap-3 bg-white rounded border p-3">
+          <span class="text-yellow-500 text-lg flex-shrink-0">⚠️</span>
+          <div><p class="text-sm font-semibold">workmux 维护者 bus factor</p><p class="text-xs text-gray-500">raine/workmux 是个人项目，若 maintainer 离开，Claude Code hook 格式变化可能导致三态检测失效</p></div>
+        </div>
+        <div class="flex gap-3 bg-white rounded border p-3">
+          <span class="text-yellow-500 text-lg flex-shrink-0">⚠️</span>
+          <div><p class="text-sm font-semibold">Seshions / wtx 维护持续性</p><p class="text-xs text-gray-500">低 star 项目（danhergir/seshions，aixolotls/wtx），短期 breaking change 风险较高</p></div>
+        </div>
+        <div class="flex gap-3 bg-white rounded border p-3">
+          <span class="text-orange-500 text-lg flex-shrink-0">🔍</span>
+          <div><p class="text-sm font-semibold">dmux "smart merge" 稳定性</p><p class="text-xs text-gray-500">仅 README 描述，2026-05 无大量实战报告；建议先在低风险场景验证</p></div>
+        </div>
+        <div class="flex gap-3 bg-white rounded border p-3">
+          <span class="text-orange-500 text-lg flex-shrink-0">🔍</span>
+          <div><p class="text-sm font-semibold">Stop hook 的 TASK_ID 传递方式待设计</p><p class="text-xs text-gray-500">env var 还是 prompt 内联？I11 dispatch 写 eva.json 时需同时设置，具体机制待实现验证</p></div>
+        </div>
+        <div class="flex gap-3 bg-white rounded border p-3">
+          <span class="text-red-500 text-lg flex-shrink-0">⚡</span>
+          <div><p class="text-sm font-semibold">Nimbalyst 商业化风险</p><p class="text-xs text-gray-500">SaaS 产品可能改变定价或关停，不应成为 Vessel 核心流程依赖（可作为可选可视化层）</p></div>
+        </div>
+        <div class="flex gap-3 bg-white rounded border p-3">
+          <span class="text-gray-400 text-lg flex-shrink-0">ℹ️</span>
+          <div><p class="text-sm font-semibold">ccswarm 实现完成度</p><p class="text-xs text-gray-500">ParallelExecutor 未接线，Actor Model 停留规划阶段，目前不可直接使用</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sources -->
+    <section>
+      <h2 id="sources" class="text-xl font-bold text-gray-900 mb-3 pb-2 border-b">主要来源</h2>
+      <div class="overflow-x-auto rounded-lg border bg-white">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b bg-gray-50">
+              <th class="text-left p-2 font-semibold">来源</th>
+              <th class="text-left p-2 font-semibold">支持 claim</th>
+              <th class="text-center p-2 font-semibold">置信度</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b"><td class="p-2"><a href="https://github.com/smtg-ai/claude-squad" class="text-blue-600 underline">smtg-ai/claude-squad</a></td><td class="p-2">架构（tmux+worktree，无冲突预检，无端口分配）</td><td class="p-2 text-center"><span class="pill-ok">高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://github.com/smtg-ai/claude-squad/issues/260" class="text-blue-600 underline">Issue #260</a></td><td class="p-2">.env 同步和端口分配是已知 gap</td><td class="p-2 text-center"><span class="pill-ok">高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://github.com/raine/workmux" class="text-blue-600 underline">raine/workmux</a></td><td class="p-2">hook+三态完成信号，与 Vessel 文件 flag 同构</td><td class="p-2 text-center"><span class="pill-ok">高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://addyosmani.com/blog/code-agent-orchestra/" class="text-blue-600 underline">addyosmani.com</a></td><td class="p-2">Tier 2 认知负担最优模式，完成信号三模式</td><td class="p-2 text-center"><span class="pill-ok">高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://htdocs.dev/posts/from-conductor-to-orchestrator-a-practical-guide-to-multi-agent-coding-in-2026/" class="text-blue-600 underline">htdocs.dev 2026</a></td><td class="p-2">单人开发者 Tier 2 dispatch 模型</td><td class="p-2 text-center"><span class="pill-ok">高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://kenhuangus.substack.com/p/claude-code-pattern-7-multi-agent" class="text-blue-600 underline">kenhuangus substack</a></td><td class="p-2">完成信号三模式分类</td><td class="p-2 text-center"><span class="pill-ok">高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://github.com/accessd/tmux-agent-indicator" class="text-blue-600 underline">tmux-agent-indicator</a></td><td class="p-2">Claude Code Stop hook 自动化实例</td><td class="p-2 text-center"><span class="pill-ok">高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://dev.to/augusto_chirico/claude-code-loves-worktrees-your-infrastructure-doesnt-kfi" class="text-blue-600 underline">dev.to worktree isolation</a></td><td class="p-2">worktree 代码隔离≠环境隔离，.env 痛点</td><td class="p-2 text-center"><span class="pill-ok">高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://github.com/kbwo/ccmanager" class="text-blue-600 underline">kbwo/ccmanager</a></td><td class="p-2">PTY 三态检测方案</td><td class="p-2 text-center"><span class="pill-ok">高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://code.claude.com/docs/en/worktrees" class="text-blue-600 underline">Claude Code 官方 worktree</a></td><td class="p-2">.worktreeinclude 设计</td><td class="p-2 text-center"><span class="pill-warn">中高</span></td></tr>
+            <tr class="border-b"><td class="p-2"><a href="https://nimbalyst.com/kanban-for-claude-code/" class="text-blue-600 underline">Nimbalyst</a></td><td class="p-2">kanban+iOS 方案，单人认知负担</td><td class="p-2 text-center"><span class="pill-warn">中</span></td></tr>
+            <tr><td class="p-2"><a href="https://zylos.ai/research/2026-02-22-git-worktree-parallel-ai-development" class="text-blue-600 underline">zylos.ai 2026-02</a></td><td class="p-2">merge-tree 预检，worktree 冲突处理</td><td class="p-2 text-center"><span class="pill-warn">中</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Metadata (collapsible) -->
+    <section id="metadata">
+      <h2 class="text-xl font-bold text-gray-900 mb-3 pb-2 border-b">调研 Metadata</h2>
+      <details class="bg-gray-50 rounded-lg border" open>
+        <summary class="p-4 font-semibold text-gray-700 hover:bg-gray-100 rounded-lg">调研流程摘要</summary>
+        <div class="p-4 text-xs text-gray-600 space-y-1 border-t">
+          <p><strong>Phase 2.5 Reflection</strong>: Q1-Q5 全通过；独立来源数全通过；无 vendor-claim 依赖；追搜决策 No</p>
+          <p><strong>Phase 5.5 Citation Health</strong>: Layer A 真实死链 0（9 个 grep 误报已排除）；Layer B 主要 claim 有 URL 支撑；PASS</p>
+          <p><strong>Phase 6 异构终审 verdict</strong>: Refine（3 条建议）</p>
+          <p><strong>辩论收敛</strong>: Round 2 收敛（条目①partial 让步→Nimbalyst+VibeTree 均进矩阵；②③ Round 1 accept）</p>
+          <p><strong>人类介入</strong>: 无</p>
+          <p><strong>Output</strong>: 并行AI编码协调工具横向对比-完整报告.md</p>
+        </div>
+      </details>
+      <details class="bg-gray-50 rounded-lg border mt-2">
+        <summary class="p-4 font-semibold text-gray-700 hover:bg-gray-100 rounded-lg">Phase 6 辩论历史</summary>
+        <div class="p-4 text-xs text-gray-600 border-t overflow-x-auto">
+          <p class="font-semibold mb-2">Round 1 判断矩阵</p>
+          <table class="w-full border text-xs">
+            <tr class="bg-gray-100"><th class="border p-1 text-left">建议</th><th class="border p-1 text-left">立场</th><th class="border p-1 text-left">论据</th></tr>
+            <tr><td class="border p-1">①额外工具被压缩</td><td class="border p-1 text-yellow-700">partial</td><td class="border p-1">Nimbalyst 进矩阵，ccswarm+wtx 正文提及；11 工具进完整矩阵过重</td></tr>
+            <tr><td class="border p-1">②官方 worktree 评分语境</td><td class="border p-1 text-green-700">accept</td><td class="border p-1">确实是 substrate 而非协调层，加 caveat，调整评分说明</td></tr>
+            <tr><td class="border p-1">③待验证风险更新</td><td class="border p-1 text-green-700">accept</td><td class="border p-1">URL 已验证，风险改为 maintainer bus factor / license 转向</td></tr>
+          </table>
+          <p class="font-semibold mt-3 mb-2">Round 2：cursor-agent rebuttal + 主 agent 二轮判断</p>
+          <table class="w-full border text-xs">
+            <tr class="bg-gray-100"><th class="border p-1 text-left">建议</th><th class="border p-1 text-left">反驳</th><th class="border p-1 text-left">主 agent 二轮</th></tr>
+            <tr><td class="border p-1">①额外工具</td><td class="border p-1">接受 partial；但 VibeTree 应进矩阵（覆盖 worktree-first 类，与 Nimbalyst 不同）</td><td class="border p-1 text-green-700">让步：Nimbalyst + VibeTree 均进矩阵</td></tr>
+          </table>
+        </div>
+      </details>
+    </section>
+
+  </main>
+</div>
+
+<footer class="text-center text-xs text-gray-400 py-6 border-t mt-8">
+  生成于 2026-05-19 · /survey skill · 2 Claude + 1 cursor-agent 异构搜索 + Phase 6 多轮辩论
+</footer>
+
+</body>
+</html>
