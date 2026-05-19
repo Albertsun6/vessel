@@ -5,7 +5,10 @@ import type { AsrClient, TranscribeOptions } from "./types.js";
 const IFLYTEK_HOST = "iat-api.xfyun.cn";
 const IFLYTEK_PATH = "/v2/iat";
 const CHUNK_SIZE = 1280; // 40ms @ 16kHz 16bit mono
-const CHUNK_INTERVAL_MS = 20; // send at 2× real-time so a 30s clip finishes in ~15s
+// iFlytek IAT is a real-time streaming API with server-side flow control:
+// sending faster than ~40ms/chunk triggers throttling that makes latency
+// WORSE (measured 20ms→4s, 10ms→10s+). 40ms = documented real-time rate.
+const CHUNK_INTERVAL_MS = 40;
 
 function buildUrl(apiKey: string, apiSecret: string): string {
   const date = new Date().toUTCString();
@@ -108,13 +111,15 @@ export class IflytekAsrClient implements AsrClient {
           };
           if (isFirst) {
             msg.common = { app_id: this.appId };
+            // No dwa:wpgs — we transcribe a complete recording, not a live
+            // stream, so dynamic word revision just duplicates partials.
+            // Without it each frame is a finalized non-overlapping segment.
             msg.business = {
               language: lang,
               domain: "iat",
               accent: "mandarin",
-              vad_eos: 3000,
-              dwa: "wpgs",
-              ptt: 0,
+              vad_eos: 1000, // we send status=2 explicitly; minimise silence wait
+              ptt: 1, // punctuation prediction — matches Groq output style
             };
           }
 
