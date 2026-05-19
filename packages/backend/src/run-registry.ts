@@ -82,7 +82,7 @@ const registry = new Map<string, RegisteredRun>();
  *  module stays free of telemetry/permission imports (clean dep direction). */
 type ReapListener = (
   runId: string,
-  event: "orphan_aborted" | "waiting_orphan_aborted" | "terminal_gc" | "liveness_lost",
+  event: ReapAction,
   run: RegisteredRun,
 ) => void;
 let reapListener: ReapListener | undefined;
@@ -245,43 +245,67 @@ export function interrupt(runId: string): boolean {
  * (satisfies I-12). Side-effects (telemetry, permission terminate) are
  * delegated to the injected reap listener so this module imports nothing.
  */
-export function startReaper(): void {
-  if (reaperTimer) return;
-  reaperTimer = setInterval(() => {
-    const now = Date.now();
-    for (const [runId, run] of registry.entries()) {
-      // Half-open attached client: no pong within liveness TTL → detach.
-      if (
-        run.state === "attached_running" &&
-        now - run.lastLivenessAt > ATTACHED_LIVENESS_TTL_MS
-      ) {
+export type ReapAction =
+  | "liveness_lost"
+  | "orphan_aborted"
+  | "waiting_orphan_aborted"
+  | "terminal_gc";
+
+/**
+ * Pure decision: what (if anything) the reaper should do to `run` at `now`.
+ * No side-effects — so the TTL boundaries are deterministically unit-testable
+ * (the load-bearing resource-safety logic; B2 was a BLOCKER about this).
+ */
+export function reapDecision(run: RegisteredRun, now: number): ReapAction | null {
+  if (
+    run.state === "attached_running" &&
+    now - run.lastLivenessAt > ATTACHED_LIVENESS_TTL_MS
+  ) {
+    return "liveness_lost";
+  }
+  if (run.state === "detached_running" && run.detachedAt !== undefined) {
+    const ttl = run.pending ? WAITING_DETACHED_TTL_MS : DETACHED_TTL_MS;
+    if (now - run.detachedAt > ttl) {
+      return run.pending ? "waiting_orphan_aborted" : "orphan_aborted";
+    }
+  }
+  if (run.terminal && now - run.terminal.endedAt > TERMINAL_RECORD_TTL_MS) {
+    return "terminal_gc";
+  }
+  return null;
+}
+
+/** One reaper sweep at `now` (extracted so tests can drive `now` directly).
+ *  Applies the pure decision's side-effect; ONLY abort path besides
+ *  client_interrupt (I-12). */
+export function runReaperSweep(now: number): void {
+  for (const [runId, run] of registry.entries()) {
+    const action = reapDecision(run, now);
+    if (action === null) continue;
+    switch (action) {
+      case "liveness_lost":
         run.attachedSend = undefined;
         run.attachConnectionId = undefined;
         run.state = "detached_running";
         run.detachedAt = now;
         reapListener?.(runId, "liveness_lost", run);
-        continue;
-      }
-      // Detached run TTL: shorter if blocked on a permission (no one decides).
-      if (run.state === "detached_running" && run.detachedAt) {
-        const ttl = run.pending ? WAITING_DETACHED_TTL_MS : DETACHED_TTL_MS;
-        if (now - run.detachedAt > ttl) {
-          run.state = "expired";
-          run.abort.abort();
-          reapListener?.(
-            runId,
-            run.pending ? "waiting_orphan_aborted" : "orphan_aborted",
-            run,
-          );
-          continue;
-        }
-      }
-      // Terminal record GC.
-      if (run.terminal && now - run.terminal.endedAt > TERMINAL_RECORD_TTL_MS) {
+        break;
+      case "orphan_aborted":
+      case "waiting_orphan_aborted":
+        run.state = "expired";
+        run.abort.abort();
+        reapListener?.(runId, action, run);
+        break;
+      case "terminal_gc":
         reapListener?.(runId, "terminal_gc", run);
         registry.delete(runId);
-      }
+        break;
     }
-  }, REAPER_INTERVAL_MS);
+  }
+}
+
+export function startReaper(): void {
+  if (reaperTimer) return;
+  reaperTimer = setInterval(() => runReaperSweep(Date.now()), REAPER_INTERVAL_MS);
   reaperTimer.unref?.();
 }

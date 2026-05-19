@@ -18,6 +18,14 @@ import {
   interrupt as registryInterrupt,
   markInterrupting,
   unregister,
+  reapDecision,
+  runReaperSweep,
+  setReapListener,
+  setPending,
+  DETACHED_TTL_MS,
+  WAITING_DETACHED_TTL_MS,
+  ATTACHED_LIVENESS_TTL_MS,
+  TERMINAL_RECORD_TTL_MS,
 } from "./run-registry.js";
 import {
   registerPermissionChannel,
@@ -165,15 +173,88 @@ async function testPermissionSecurity() {
   await askC;             // drain so the event loop empties and we can exit
 }
 
+// ── #5 (time) — reaper TTL boundaries via the pure decision (no real wait) ─
+async function testReaperTTL() {
+  console.log("#5 reaper TTL boundaries (now injected — deterministic)");
+  const events: Array<{ runId: string; event: string }> = [];
+  setReapListener((runId, event) => events.push({ runId, event }));
+
+  // (a) attached_running, fresh liveness → no action.
+  const acA = new AbortController();
+  register("rt-a", {
+    abort: acA, cwd: "/p", prompt: "x", startedAt: Date.now(),
+    capabilityReattach: true, permissionToken: "tt-a",
+    send: () => {}, connectionId: "c1",
+  });
+  const runA = get("rt-a")!;
+  assert(reapDecision(runA, Date.now()) === null, "attached + fresh liveness → no reap");
+  assert(
+    reapDecision(runA, Date.now() + ATTACHED_LIVENESS_TTL_MS + 1) === "liveness_lost",
+    "attached + stale liveness (> ATTACHED_LIVENESS_TTL) → liveness_lost",
+  );
+  unregister("rt-a");
+
+  // (b) detached_running, no pending: orphan_aborted only AFTER DETACHED_TTL.
+  const acB = new AbortController();
+  register("rt-b", {
+    abort: acB, cwd: "/p", prompt: "x", startedAt: Date.now(),
+    capabilityReattach: true, permissionToken: "tt-b",
+    send: () => {}, connectionId: "c1",
+  });
+  detach("rt-b", "c1");
+  const runB = get("rt-b")!;
+  assert(reapDecision(runB, Date.now() + WAITING_DETACHED_TTL_MS + 1) === null,
+    "detached, NO pending → still alive at WAITING ttl (long turns get full DETACHED_TTL)");
+  assert(reapDecision(runB, Date.now() + DETACHED_TTL_MS + 1) === "orphan_aborted",
+    "detached, no pending, past DETACHED_TTL → orphan_aborted");
+  runReaperSweep(Date.now() + DETACHED_TTL_MS + 1);
+  assert(runB.state === "expired", "sweep → state=expired");
+  assert(acB.signal.aborted === true, "sweep → run aborted (resource bound enforced, B2)");
+  assert(events.some(e => e.runId === "rt-b" && e.event === "orphan_aborted"),
+    "reap listener fired orphan_aborted");
+  unregister("rt-b");
+
+  // (c) detached_running WITH pending: shorter WAITING_DETACHED_TTL applies.
+  const acC = new AbortController();
+  register("rt-c", {
+    abort: acC, cwd: "/p", prompt: "x", startedAt: Date.now(),
+    capabilityReattach: true, permissionToken: "tt-c",
+    send: () => {}, connectionId: "c1",
+  });
+  detach("rt-c", "c1");
+  setPending("rt-c", { kind: "permission", requestId: "p1", toolName: "Bash", input: {} });
+  const runC = get("rt-c")!;
+  assert(reapDecision(runC, Date.now() + WAITING_DETACHED_TTL_MS + 1) === "waiting_orphan_aborted",
+    "detached + pending → reaped at the SHORTER WAITING_DETACHED_TTL (nobody decides)");
+  unregister("rt-c");
+
+  // (d) terminal record GC after TERMINAL_RECORD_TTL.
+  const acD = new AbortController();
+  register("rt-d", {
+    abort: acD, cwd: "/p", prompt: "x", startedAt: Date.now(),
+    capabilityReattach: true, permissionToken: "tt-d",
+    send: () => {}, connectionId: "c1",
+  });
+  recordTerminal("rt-d", "completed");
+  const runD = get("rt-d")!;
+  assert(reapDecision(runD, Date.now() + 1000) === null,
+    "fresh terminal record kept (late reattach can still read the real outcome)");
+  assert(reapDecision(runD, Date.now() + TERMINAL_RECORD_TTL_MS + 1) === "terminal_gc",
+    "terminal record past TERMINAL_RECORD_TTL → terminal_gc");
+  runReaperSweep(Date.now() + TERMINAL_RECORD_TTL_MS + 1);
+  assert(get("rt-d") === undefined, "sweep GC'd the terminal record (registry entry deleted)");
+}
+
 async function main() {
   await testSinkRebind();
   await testStateMachineAbortBoundary();
+  await testReaperTTL();
   await testPermissionSecurity();
   if (failures > 0) {
     console.error(`\nADR-023 dogfood: ${failures} FAILURE(S)`);
     process.exit(1);
   }
-  console.log("\nADR-023 dogfood (#2 security / #3 sink / #5 abort-boundary): ALL PASS");
+  console.log("\nADR-023 dogfood (#2 security / #3 sink / #5 abort-boundary + reaper TTL): ALL PASS");
   process.exit(0);
 }
 
