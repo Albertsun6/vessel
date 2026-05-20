@@ -492,7 +492,7 @@ Safari 分享 → 添加到主屏幕 → 全屏 standalone。
 
 ## iOS 原生 app（Seaidea）
 
-**这是 v1 推荐的手机端方案**。SwiftUI 重写，绕开 PWA 在 iOS 上的诸多约束（autoplay、物理静音键、后台 mic）。Capacitor 路径已标 deprecated。
+**这是 v1 推荐的手机端方案**。SwiftUI 重写，绕开 PWA 在 iOS 上的诸多约束（autoplay、物理静音键、后台 mic）。Capacitor 路径已于 2026-05-20 删除（之前长期标 deprecated）。
 
 > Bundle 显示名是 **Seaidea**（避免跟 Anthropic 的 Claude 商标冲突）。Bundle id 仍是 `com.albertsun6.claudeweb-native`。
 
