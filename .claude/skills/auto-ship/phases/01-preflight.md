@@ -40,7 +40,7 @@ command -v cursor-agent >/dev/null 2>&1 && echo "cursor-ok" || echo "cursor-degr
 
 | 检查 | fail 后果 |
 |---|---|
-| 当前分支 = `main` / `dev` | abort："拒绝从受保护分支 ship；先开 feat/* 分支" |
+| 当前分支 = `main` | abort："拒绝从受保护分支 ship；先开 feat/* 分支" |
 | 当前分支不是 `feat/*` / `fix/*` / `chore/*` / `docs/*` / `refactor/*` | abort："分支名不符合 Vessel 约定，无法自动定 commit type" |
 | 无 diff | abort："本地 vs main 无 diff，没东西可 ship" |
 | 远端不可达 | abort："远端不可达，无法 ship" |

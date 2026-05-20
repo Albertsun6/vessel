@@ -191,7 +191,7 @@ Claude 给推荐时按这套启发式（不是硬规则，会结合 parallel_saf
 
 1. Claude echo 5 步命令模板：
    ```
-   git worktree add -b feat/eva-m2-voice-proposal ~/Desktop/Vessel-voice dev
+   git worktree add -b feat/eva-m2-voice-proposal ~/Desktop/Vessel-voice main
    编辑 eva.json 加 worktree 条目
    open -a Cursor ~/Desktop/Vessel-voice
    新窗口里粘：「开始干 m2-voice-proposal，详情见 docs/BACKLOG.md」
@@ -217,7 +217,7 @@ worker 在 spawn 出来的窗口里完成任务后，**自己跑**：
 ```bash
 # 代码任务：开 PR 但 NOT auto-merge（R2 不变量）
 git push -u <remote> <branch>
-gh pr create --base dev --title "feat(...): ..." --body "..."
+gh pr create --base main --title "feat(...): ..." --body "..."
 
 # 然后写 done flag
 ./scripts/steward-signal-done.sh <task-id> --pr <PR_URL> --summary "<1 行说明>"
@@ -239,7 +239,7 @@ PENDING  <task-id>
 
 **为什么不让 worker 直接合 PR**：保留 review 边界。docs/research/proposal 类如果 CI 已过 + branch protection 满足，可在 signal 备注 "ready for auto-merge" 让主线确认后 `gh pr merge --auto`。
 
-**为什么不让 worker 直接改 BACKLOG.md**：I1 source-of-truth 仍归主线。worker 在它自己 branch 里改也无法把改动反映回 dev branch（物理隔离），所以由主线握状态权才一致。
+**为什么不让 worker 直接改 BACKLOG.md**：I1 source-of-truth 仍归主线。worker 在它自己 branch 里改也无法把改动反映回 main（物理隔离），所以由主线握状态权才一致。
 
 ### 流程 D：临时想到一件事
 

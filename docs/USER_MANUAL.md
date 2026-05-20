@@ -410,6 +410,8 @@ PreToolUse hook → POST 后端 `/api/permission/ask` → WS 推前端 → 用�
 | **Stable (prod)** | `:3030` | `~/Desktop/claude-web-prod`（git tag 锁定）| `~/.claude-web` | `pnpm start:backend`（无 watch） |
 | **Dev** | `:3031` | `~/Desktop/claude-web`（主工作树）| `~/.claude-web-dev` | `pnpm dev:backend`（tsx watch）|
 
+> 表中 "Dev" 指 development **environment**（`:3031` + tsx watch），不是 git 分支。2026-05-20 起分支模型已改 main-only，但 `~/.claude-web-dev` 数据目录名保留不动。
+
 编辑 `src/` 只重启 dev 实例（:3031），stable 实例（:3030）纹丝不动——你日常用的 iOS 不受开发影响。
 
 数据目录通过 `CLAUDE_WEB_DATA_DIR` env 指定；模板 plist 在 [`scripts/launchd/`](scripts/launchd/)。
