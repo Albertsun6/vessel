@@ -69,7 +69,7 @@ Phase 1 Preflight 启动 banner + 5 秒撤回 + 环境/分支/远端检查      
 3. **PR review loop 最多 3 轮**——硬上限，不接 `--max-rounds` flag
 4. **ping-pong 检测**：连续 2 轮 review finding 的归一化文本 SHA-256 一致 → 立即中止
 5. **协议层警戒**：diff 含 `packages/shared/` / `packages/backend/src/routes/` / `packages/backend/src/harness-config.ts` / `packages/ios-native/Sources/ClaudeWeb/HarnessProtocol.swift` 时，Phase 1 加二次 5 秒撤回窗（半 I13 兼容，给用户最后机会撤回）
-6. **Worktree 不动**：auto-ship 不主动 `git worktree remove`（destructive，CLAUDE.md I8 destructive needs explicit affirmative）
+6. **Worktree merge 后自动清**：Phase 5 轮询确认 PR=MERGED 之后会自动 `git worktree remove $WORKTREE_PATH` + 删本地分支。用户触发 `/auto-ship` 本身即是 CLAUDE.md I8 的 explicit affirmative（用户已 opt-in 此 destructive 行为）。如果 Phase 5 轮询超时（180s 内未 merge），worktree + 分支保留，吐手动清理命令
 7. **base branch = main**：不允许从 main / dev 直接 ship；分支必须是 feat/* / fix/* / chore/* / docs/*
 
 ## 复用的现有 skill
