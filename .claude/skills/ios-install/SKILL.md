@@ -14,7 +14,7 @@ description: 把 Seaidea iOS app 单次 install/redeploy 到设备（真机或 s
 **默认 PASS 才装机**——M0 期间多次撞过"协议层错了，已经 build 完才发现，浪费 1-2min build"，立成铁律：
 
 ```bash
-pnpm --filter @claude-web/shared test         # 必须全绿
+pnpm --filter @vessel/shared test             # 必须全绿
 curl -sS http://127.0.0.1:3030/api/harness/config | jq -e '.protocolVersion' >/dev/null  # 必须 200 OK + JSON parseable
 ```
 
