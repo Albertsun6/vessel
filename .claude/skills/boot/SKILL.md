@@ -1,6 +1,6 @@
 ---
 name: boot
-description: Steward V0 session boot ritual — 读 docs/BACKLOG.md，回 echo "Backlog: N in_progress · M planned · K blocked"，stale 时（>72h）警告。Use when 用户粘 `/boot`，或新 Claude session 启动时主动跑（per CLAUDE.md 约定）。这是 9 个 Steward prompt 的第 1 个 (STEWARD_PROMPTS.md)；其余 8 个用纯自然语言 (`看 backlog 推荐下一步` / `开始干 <id>` / `<id> 收线` etc.)。
+description: Steward V0 session boot ritual — 读 docs/BACKLOG.md，回 echo "Backlog: N in_progress · M planned · K blocked"，stale 时（>72h）警告。Use when 用户粘 `/boot`，或新 Claude session 启动时主动跑（per CLAUDE.md 约定）。这是 9 个 Steward prompt 的第 1 个 (STEWARD_PROMPTS.md)；其余 8 个用纯自然语言 (`看 backlog 推荐下一步` / `开始干 <id>` / `<id> 收线` etc.)。完整 10 短语统一入口见 `.claude/skills/steward/SKILL.md`；`/boot` 在此作最小兜底共存。
 ---
 
 # Steward V0 — boot ritual
