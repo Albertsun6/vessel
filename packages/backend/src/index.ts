@@ -34,6 +34,10 @@ import {
   getPendingPermission,
 } from "./routes/permission.js";
 import { inboxRouter } from "./routes/inbox.js";
+import { setPimDbForInbox } from "./inbox-store.js";
+import { pimRouter, setPimDbForRoutes, setPimBroadcast } from "./routes/pim.js";
+import { pimCapturePageHandler } from "./routes/pim-page.js";
+import { cleanupOrphanAiSuggestions, isPimAiEnabled } from "./pim-ai-suggester.js";
 import { updateCheckRouter } from "./routes/update-check.js";
 import { runsRouter } from "./routes/runs.js";
 import { helpRouter } from "./routes/help.js";
@@ -171,6 +175,14 @@ app.route("/api/projects", projectsRouter);
 app.route("/api/telemetry", telemetryRouter);
 app.route("/api/permission", permissionRouter);
 app.route("/api/inbox", inboxRouter);
+// M0-PIM (ADR-020) — PimItem CRUD + sanity-report + attach-issue
+app.route("/api/pim", pimRouter);
+// M0-PIM Day 4c — self-contained capture page (no React, cross-device).
+// Mount BEFORE Eva SPA `/*` fallback (which routes everything to index.html).
+app.get("/pim", pimCapturePageHandler() as never);
+app.get("/pim/", pimCapturePageHandler() as never);
+app.get("/pim/capture", pimCapturePageHandler() as never);
+app.get("/pim/capture/", pimCapturePageHandler() as never);
 app.route("/api/version", updateCheckRouter);
 app.route("/api/runs", runsRouter);
 app.route("/api/help", helpRouter);
@@ -199,6 +211,18 @@ if (!process.env.HARNESS_DISABLED) {
   try {
     _harnessDb = openHarnessDb();
     console.log(`[harness] SQLite ready (schema v${_harnessDb.schemaVersion})`);
+    // ADR-020 D3: POST /api/inbox dual-write 同时写 jsonl + pim_item.
+    // 2-week buffer 期间 inbox.jsonl 与 pim_item 都接收新增, Week 3 末
+    // 标 inbox.jsonl 为 .deprecated.
+    setPimDbForInbox(_harnessDb);
+    // ADR-020 D5 — PIM CRUD routes (/api/pim) need DB instance.
+    setPimDbForRoutes(_harnessDb);
+    // ADR-020 D9 Week 2 — cleanup orphan AI suggestions left by previous
+    // crashed backend run (ai_status='running' > 5min → 'failed'). Idempotent.
+    cleanupOrphanAiSuggestions(_harnessDb.db);
+    console.log(
+      `[pim-ai-suggester] PIM_AI_ENABLED=${isPimAiEnabled()} (set env var to 'true' to enable)`,
+    );
   } catch (err) {
     console.error("[harness] DB init failed — harness routes unavailable:", err);
     app.all("/api/harness/*", (c) =>
@@ -395,6 +419,10 @@ function broadcastToAll(msg: unknown): void {
 if (_harnessDb) {
   app.route("/api/harness", buildHarnessRouter(_harnessDb.db, broadcastToAll));
 }
+
+// ADR-020 Week 2 Day 12 — PIM routes broadcast `{type:'pim_event', kind, id}` on
+// mutations for cross-device sync. Injected here (after wss.clients ready).
+setPimBroadcast(broadcastToAll);
 
 // M1C-A: Workflow Engine routes (broadcastToAll injected per cursor B-级 review M-2).
 app.route("/api/vessel", buildWorkflowRouter(broadcastToAll));
