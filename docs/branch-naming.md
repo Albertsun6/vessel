@@ -68,7 +68,7 @@ harness/<issueId>-<3-5-word-slug>
 `type`: `feat` | `fix` | `chore` | `docs` | `refactor` | `test`
 `milestone`: `M1` | `M2` | `M3` …（无里程碑归属的零散 fix 可省略）
 
-PR 流向：`feat/*` → `dev`（squash merge）→ `main`（merge commit + tag）
+PR 流向：`feat/*` → `main`（squash merge，release-worthy 时打 tag）
 worktree 并行任务见 [WORKTREE_LOCK.md](../WORKTREE_LOCK.md)。
 
 ---

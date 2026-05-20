@@ -118,15 +118,14 @@ function getActiveWorktrees() {
 }
 
 // ── Get changed files vs base branch ─────────────────────────────────────────
+// Only origin/main since 2026-05-20 (dev branch retired; was previously a
+// fallback target ahead of origin/main here).
 function getDirtyFiles() {
-  const bases = ["origin/dev", "origin/main"];
-  for (const base of bases) {
-    const r = spawnSync("git", ["diff", "--name-only", `HEAD..${base}`], {
-      cwd: REPO_ROOT, encoding: "utf8",
-    });
-    if (r.status === 0) {
-      return r.stdout.trim().split("\n").filter(Boolean);
-    }
+  const r = spawnSync("git", ["diff", "--name-only", "HEAD..origin/main"], {
+    cwd: REPO_ROOT, encoding: "utf8",
+  });
+  if (r.status === 0) {
+    return r.stdout.trim().split("\n").filter(Boolean);
   }
   return [];
 }
