@@ -44,5 +44,9 @@ DerivedData/
 # 本地语音/会议录音 — 个人工作流产物，不进仓库
 *.m4a
 
+# /survey skill 本地 sidecar — repo 根的 *-完整报告.html，不进仓库
+# (.md 主报告进 docs/research/；.m4a 走上面 *.m4a 规则)
+/*-完整报告.html
+
 # Claude Code 调度器本地 lock — 进程间互斥，运行时产物
 .claude/scheduled_tasks.lock
