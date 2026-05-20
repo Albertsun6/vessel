@@ -58,15 +58,14 @@ WORKTREE_PATH="$(pwd)"
 COMPLETED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 # ── Verifiable artifact check ────────────────────────────────────────────────
-# 可验证产物 = 分支有新 commit（vs origin/dev 或 origin/main），或提供了 --pr URL。
+# 可验证产物 = 分支有新 commit（vs origin/main），或提供了 --pr URL。
 # 若两者都缺，写 warning 但不阻断（worker 可能是纯文档任务无新 commit）。
+# 历史注：2026-05-20 之前还 fallback 检查 origin/dev，弃用 dev 后改 main-only。
 ARTIFACT_OK=false
 if [ -n "$PR_URL" ]; then
   ARTIFACT_OK=true
 else
-  BASE_SHA="$(git rev-parse origin/dev 2>/dev/null \
-    || git rev-parse origin/main 2>/dev/null \
-    || echo unknown)"
+  BASE_SHA="$(git rev-parse origin/main 2>/dev/null || echo unknown)"
   if [ "$COMMIT_SHA" != "unknown" ] && \
      [ "$BASE_SHA" != "unknown" ] && \
      [ "$COMMIT_SHA" != "$BASE_SHA" ]; then
@@ -76,7 +75,7 @@ fi
 
 if [ "$ARTIFACT_OK" = false ]; then
   echo "⚠️  WARNING: no verifiable artifact" >&2
-  echo "   分支与 origin/dev 的 HEAD 相同（无新 commit），且未提供 --pr URL。" >&2
+  echo "   分支与 origin/main 的 HEAD 相同（无新 commit），且未提供 --pr URL。" >&2
   echo "   建议：先 git commit，或加 --pr <url>，再跑 signal-done。" >&2
   echo "   （flag 仍会写入，主线收线时会看到 artifact_ok=false 提示）" >&2
 fi

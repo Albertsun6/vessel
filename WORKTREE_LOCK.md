@@ -62,9 +62,11 @@ H12 v1 **只做** schema + status reader + 本文件降级。**不做** auto-loc
 
 | 实例 | PORT | DATA_DIR |
 |---|---|---|
-| main dev server / 主 worktree | 3030（prod stable）/ 3031（dev） | `~/.claude-web` / `~/.claude-web-dev` |
+| 主 worktree | 3030（prod stable）/ 3031（development env） | `~/.claude-web` / `~/.claude-web-dev` |
 | worktree 1（次要并行）| 3032 | `~/.claude-web-trackN` |
 | worktree 2+ | 待规划 | 待规划 |
+
+> 注：`~/.claude-web-dev` 中的 "dev" 是 development **environment**（与 `:3031` + `tsx watch` 关联），与已废弃的 dev **git branch** 无关。2026-05-20 起改 main-only 分支模型后该目录名保留不动。
 
 每个 worktree 在项目根目录建 `.env.local`（已 gitignore）写入对应 PORT：
 
