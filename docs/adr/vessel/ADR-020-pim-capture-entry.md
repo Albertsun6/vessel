@@ -1,8 +1,8 @@
 # ADR-020: PIM 统一捕获入口（v2.1 个人 PIM 试点 backend 模块）
 
-- **Status**: Proposed (2026-05-14，PIM M0 Day 0 草稿)
-- **Date**: 2026-05-14
-- **Deciders**: yongqian（待 review）
+- **Status**: **Accepted** (2026-05-14，Week 1 验收通过 — Day 1-7 全部 ship + 212/212 tests pass + iOS xcodebuild BUILD SUCCEEDED)
+- **Date**: 2026-05-14 (Proposed → Accepted)
+- **Deciders**: yongqian (Week 1 验收完成)
 - **Tags**: pim, capture-entry, backend, eva-legacy-pattern, M0
 - **Depends on**: [ADR-000 adopt-eva-codebase](ADR-000-adopt-eva-codebase-as-vessel-foundation.md), [ADR-006 schema-evolution](ADR-006-schema-evolution.md), [ADR-008 config-location](ADR-008-config-location.md), [ADR-013 rename-strategy](ADR-013-rename-strategy.md), [ADR-018 aisep-vs-harness](ADR-018-aisep-vs-harness.md)
 - **Source**: 3 轮 /survey 调研 + 5 轮设计迭代 + Plan agent R1-R8 + cursor-agent 4 条 = 12 个独立审查点全 accept
@@ -25,7 +25,7 @@ PIM **不属于** 现有 3 套并行 spiral：
 | Spiral | 用途 | PIM 关系 |
 |---|---|---|
 | **HARNESS_*** (eva-legacy) | Eva 自身 SDLC 流程（Issue → Stage → Task）| 不是 PIM |
-| **AISEP** (`packages/aisep-*/`) | AI 软件工程平台，开发各种软件 | 不是 PIM |
+| **AISEP** ([vessel-aisep](https://github.com/Albertsun6/vessel-aisep) external repo since 2026-05-15) | AI 软件工程平台，开发各种软件 | 不是 PIM |
 | **Steward V0** (`docs/BACKLOG.md` + 10 prompts) | Vessel 项目内部任务追踪 | 是 task subset，不是全 PIM |
 
 PIM 是**用户自身的个人信息管理**（任务/笔记/灵感/通讯/日志/目标/项目），独立于 Vessel 项目自身 SDLC。

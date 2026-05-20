@@ -1,40 +1,20 @@
 // POST /api/voice/transcribe
 //   body: raw audio bytes (audio/webm, audio/mp4, audio/wav...)
-//   returns: { text: string, durationMs: number }
+//   returns: { text: string, durationMs: number, provider: string }
 //
-// Pipeline: incoming audio → ffmpeg → 16kHz mono WAV → whisper-cli → text.
-// All processing local; no external API.
+// Pipeline: incoming audio → ffmpeg → 16kHz mono WAV → ASR provider → text.
+// Provider chain (auto-selected by env): iflytek → groq → whisper-cpp.
 
 import { Hono } from "hono";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import os from "node:os";
 import { appendEvents } from "../telemetry-store.js";
+import { asrChain, transcribeWithFallback, resolveWhisperModel } from "../asr/index.js";
 
-const WHISPER_BIN = process.env.WHISPER_BIN ?? "whisper-cli";
 const FFMPEG_BIN = process.env.FFMPEG_BIN ?? "ffmpeg";
 const DEFAULT_LANG = process.env.WHISPER_LANG ?? "zh";
-
-// Pick the best whisper model present, preferring accuracy over size.
-// Order: full → turbo → quantized turbo. Override via WHISPER_MODEL env.
-function resolveWhisperModel(): string {
-  if (process.env.WHISPER_MODEL) return process.env.WHISPER_MODEL;
-  const dir = path.join(os.homedir(), ".whisper-models");
-  const candidates = [
-    "ggml-large-v3.bin",
-    "ggml-large-v3-turbo.bin",
-    "ggml-large-v3-turbo-q5_0.bin",
-  ];
-  for (const f of candidates) {
-    const p = path.join(dir, f);
-    if (existsSync(p)) return p;
-  }
-  // fallback to the historical default even if missing — error surfaces at runtime
-  return path.join(dir, "ggml-large-v3-turbo-q5_0.bin");
-}
 
 // Project / domain vocabulary fed into whisper as initial_prompt — biases the
 // decoder toward correct spelling of frequently-mistranscribed proper nouns.
@@ -166,40 +146,21 @@ voiceRouter.post("/transcribe", async (c) => {
       return c.json({ error: `ffmpeg failed: ${ff.stderr.slice(0, 300)}` }, 500);
     }
 
-    // whisper-cli: -nt (no timestamps), -np (no progress), --prompt for vocab bias
-    const model = resolveWhisperModel();
-    const outPrefix = path.join(dir, "transcript");
+    const wavBuffer = await readFile(wavPath);
     const promptArg = prevHint
       ? `${WHISPER_PROMPT}. Previously: ${prevHint}`
       : WHISPER_PROMPT;
-    const w = await run(WHISPER_BIN, [
-      "-m", model,
-      "-l", lang,
-      "-nt", "-np",
-      "--prompt", promptArg,
-      "-otxt",
-      "-of", outPrefix,
-      wavPath,
-    ], 60_000);
-    if (w.code !== 0) {
-      return c.json({ error: `whisper failed: ${w.stderr.slice(0, 300)}` }, 500);
-    }
+    const { text: rawText, provider } = await transcribeWithFallback(
+      asrChain,
+      wavBuffer,
+      { language: lang, prompt: promptArg },
+    );
+    // Hallucination stripping is whisper-cpp specific (YouTube watermarks).
+    const text = provider === "whisper-cpp"
+      ? stripWhisperTailHallucinations(rawText)
+      : rawText;
 
-    let text: string;
-    try {
-      text = (await readFile(`${outPrefix}.txt`, "utf-8")).trim();
-    } catch {
-      // fallback: parse stdout (whisper-cli also prints transcript)
-      text = w.stdout
-        .split("\n")
-        .filter((l) => l && !l.startsWith("[") && !l.startsWith("ggml_") && !l.startsWith("load_"))
-        .join("\n")
-        .trim();
-    }
-
-    text = stripWhisperTailHallucinations(text);
-
-    return c.json({ text, durationMs: Date.now() - started });
+    return c.json({ text, durationMs: Date.now() - started, provider });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return c.json({ error: message }, 500);
@@ -210,10 +171,12 @@ voiceRouter.post("/transcribe", async (c) => {
 
 voiceRouter.get("/info", (c) =>
   c.json({
-    model: resolveWhisperModel(),
+    providers: asrChain.map((p) => p.name),
+    activeProvider: asrChain[0]?.name ?? "none",
+    whisperModel: resolveWhisperModel(),
     lang: DEFAULT_LANG,
     promptVocabSize: WHISPER_PROMPT.length,
-    available: true,
+    available: asrChain.length > 0,
   }),
 );
 
