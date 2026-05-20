@@ -43,7 +43,10 @@ final class WebSocketClient {
 
     private var task: URLSessionWebSocketTask?
     private var session: URLSession
-    private var reconnectDelay: TimeInterval = 1
+    /// Initial backoff. Bumped 1→5s to align with HeartbeatMonitor base and
+    /// halve the retry frequency in the first minute of an outage. Cycles
+    /// 5→10→20→40→60s ceil with ±20% jitter (see scheduleReconnect).
+    private var reconnectDelay: TimeInterval = 5
     private var reconnectTask: Task<Void, Never>?
     private var receiveTask: Task<Void, Never>?
 
@@ -93,12 +96,39 @@ final class WebSocketClient {
         let t = session.webSocketTask(with: wsURL)
         task = t
         t.resume()
-        state = .connected
-        lastPongAt = Date()
-        telemetry?.log("ws.connect.ok")
-        onConnected?()
-        receiveTask = Task { [weak self] in await self?.receiveLoop() }
-        startPingTimer()
+
+        // Confirm handshake before flipping state to .connected. Previously
+        // state was set to .connected synchronously after resume(), which fires
+        // onConnected side effects (HTTP refetch + WS resubscribe). On a dead
+        // handshake (e.g. Tailscale serve → 502 backend), receive() fails ms
+        // later — state flips back to .error. Every retry cycle = 1 false
+        // .connected blip + 1 wasted HTTP fetch + N failed WS sends + UI
+        // flashes through 3 states. Combined with 1s initial backoff that's
+        // the dominant cause of "phone heats up + page flickers" during outage.
+        //
+        // sendPing → pong roundtrip exercises the full WS protocol path. Any
+        // open WS server auto-replies pongs (WebSocket protocol primitive), so
+        // pong success = real connection. Only then fire onConnected.
+        t.sendPing { [weak self, weak t] error in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // Stale callback if the task was replaced by reconnect/disconnect.
+                guard let current = self.task, current === t else { return }
+                if let error {
+                    self.state = .error(error.localizedDescription)
+                    self.telemetry?.warn("ws.handshake.failed",
+                                         props: ["error": error.localizedDescription])
+                    self.scheduleReconnect()
+                    return
+                }
+                self.state = .connected
+                self.lastPongAt = Date()
+                self.telemetry?.log("ws.connect.ok")
+                self.onConnected?()
+                self.receiveTask = Task { [weak self] in await self?.receiveLoop() }
+                self.startPingTimer()
+            }
+        }
     }
 
     func disconnect() {
@@ -110,7 +140,7 @@ final class WebSocketClient {
 
     func reconnect() {
         disconnect()
-        reconnectDelay = 1
+        reconnectDelay = 5
         connect()
     }
 
@@ -133,7 +163,7 @@ final class WebSocketClient {
     /// timeout from the BG gap.
     func enterForeground() {
         if task == nil {
-            reconnectDelay = 1
+            reconnectDelay = 5
             connect()
         } else {
             lastPongAt = Date()
@@ -180,9 +210,9 @@ final class WebSocketClient {
             do {
                 let msg = try await t.receive()
                 // First successful frame after a (re)connect = healthy socket.
-                // Reset backoff so a future fresh outage starts at 1s instead
-                // of whatever cap (60s) the last outage drove us up to.
-                reconnectDelay = 1
+                // Reset backoff so a future fresh outage starts at base (5s)
+                // instead of whatever cap (60s) the last outage drove us up to.
+                reconnectDelay = 5
                 let data: Data
                 switch msg {
                 case .data(let d): data = d

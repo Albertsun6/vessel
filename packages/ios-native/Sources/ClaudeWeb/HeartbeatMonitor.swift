@@ -1,8 +1,16 @@
 // Polls /api/health/heartbeat every few seconds. Exposes a small status struct
 // so SettingsView (and future toolbar badges) can render "Mac is alive" indicator.
 //
-// Lightweight — endpoint returns in <5ms. Pause polling when iOS app is in
-// background to save battery.
+// Lightweight — endpoint returns in <5ms.
+//
+// Battery / heat behavior:
+//   - Healthy: poll every `baseIntervalSec` (5s by default).
+//   - Unreachable: exponential backoff 10→30→60s ceil so a sustained outage
+//     stops hammering the network every 5s (the original "device gets hot"
+//     symptom). First successful fetch resets the interval to base.
+//   - Background: enterBackground() kills the timer entirely so iOS doesn't
+//     burn its BG runtime window on retries during prolonged outages.
+//     enterForeground() restarts at base interval.
 
 import Foundation
 import SwiftUI
@@ -35,23 +43,31 @@ final class HeartbeatMonitor {
     var lastFetchAt: Date?
 
     private let baseURL: () -> URL
-    private let intervalSec: Double
+    private let baseIntervalSec: Double
     private let freshnessSec: Double = 12 // status flips to .stale after this
+    /// Caps the unreachable backoff. 60s aligns with WebSocketClient.reconnectDelay ceiling.
+    private let maxIntervalSec: Double = 60
+    /// Current poll interval — mutates with backoff. Starts at base, climbs on
+    /// unreachable, resets on first .healthy fetch.
+    private var currentIntervalSec: Double
     private var timer: Timer?
     private var task: Task<Void, Never>?
+    /// `start()` was called at least once. Used by enterForeground to decide
+    /// whether to re-arm the timer (don't auto-start before the app is ready).
+    private var hasStarted: Bool = false
 
     init(baseURL: @escaping () -> URL, intervalSec: Double = 5.0) {
         self.baseURL = baseURL
-        self.intervalSec = intervalSec
+        self.baseIntervalSec = intervalSec
+        self.currentIntervalSec = intervalSec
     }
 
     @MainActor
     func start() {
+        hasStarted = true
         stop()
-        timer = Timer.scheduledTimer(withTimeInterval: intervalSec, repeats: true) { [weak self] _ in
-            self?.fetchNow()
-        }
-        timer?.tolerance = intervalSec * 0.2
+        currentIntervalSec = baseIntervalSec
+        scheduleTimer()
         fetchNow()
     }
 
@@ -60,6 +76,35 @@ final class HeartbeatMonitor {
         timer?.invalidate()
         timer = nil
         task?.cancel()
+    }
+
+    /// App moves to background: kill the timer so iOS doesn't burn its BG
+    /// runtime window polling a possibly-unreachable backend (the heat fix).
+    /// Mirror of WebSocketClient.enterBackground.
+    @MainActor
+    func enterBackground() {
+        timer?.invalidate()
+        timer = nil
+        task?.cancel()
+    }
+
+    /// App returns to foreground: re-arm at base interval (don't carry stale
+    /// backoff from before backgrounding — let one fresh probe determine state).
+    @MainActor
+    func enterForeground() {
+        guard hasStarted else { return }
+        currentIntervalSec = baseIntervalSec
+        scheduleTimer()
+        fetchNow()
+    }
+
+    @MainActor
+    private func scheduleTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: currentIntervalSec, repeats: true) { [weak self] _ in
+            self?.fetchNow()
+        }
+        timer?.tolerance = currentIntervalSec * 0.2
     }
 
     @MainActor
@@ -93,12 +138,28 @@ final class HeartbeatMonitor {
         self.snapshot = snap
         self.status = .healthy
         self.lastFetchAt = Date()
+        // Healthy fetch → backoff resets so a future fresh outage starts at
+        // baseIntervalSec instead of whatever cap (60s) the last outage hit.
+        if currentIntervalSec != baseIntervalSec {
+            currentIntervalSec = baseIntervalSec
+            scheduleTimer()
+        }
     }
 
     @MainActor
     private func update(status: Status) {
         self.status = status
         // Don't clear snapshot — old data is useful while reconnecting.
+        // Unreachable → grow the interval (10s → 30s → 60s ceil). 5s base
+        // would otherwise keep hammering during a sustained outage, which is
+        // exactly the "device heats up while disconnected" symptom.
+        if case .unreachable = status {
+            let next = min(maxIntervalSec, max(currentIntervalSec * 2, 10))
+            if next != currentIntervalSec {
+                currentIntervalSec = next
+                scheduleTimer()
+            }
+        }
     }
 
     private func shortError(_ error: Error) -> String {
