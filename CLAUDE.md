@@ -20,7 +20,7 @@ packages/
   frontend/    React 18 + Vite + Zustand. Built dist served by backend.
                 packages/frontend/ios/  ⚠️ Capacitor wrapper — DEPRECATED. Don't add features here.
   shared/      Protocol types (ClientMessage, ServerMessage).
-  ios-native/  ✅ SwiftUI native iOS app (display name "Seaidea", bundle id com.albertsun6.claudeweb-native).
+  ios-native/  ✅ SwiftUI native iOS app (display name "Seaidea", bundle id com.albertsun6.vessel).
                 Canonical iOS path from v1. xcodegen-driven, talks to backend over WS + HTTP.
                 Per-conversation state with runId routing (mirrors web's byCwd).
                 Cache layer at Application Support persists conversations across launch.
