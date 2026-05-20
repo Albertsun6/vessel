@@ -18,7 +18,6 @@ CLI inherits the user's OAuth credentials at `~/.claude/.credentials.json`.
 packages/
   backend/      Hono + ws on :3030. Spawns claude CLI per WS prompt. Serves the dist/.
   frontend/    React 18 + Vite + Zustand. Built dist served by backend.
-                packages/frontend/ios/  ⚠️ Capacitor wrapper — DEPRECATED. Don't add features here.
   shared/      Protocol types (ClientMessage, ServerMessage).
   ios-native/  ✅ SwiftUI native iOS app (display name "Seaidea", bundle id com.albertsun6.vessel).
                 Canonical iOS path from v1. xcodegen-driven, talks to backend over WS + HTTP.
@@ -31,13 +30,13 @@ Single-port deploy: backend serves `dist/` + `/api/*` + `/ws` from one origin.
 Vite dev (`pnpm dev:frontend`) proxies to backend at 3030.
 
 **iOS path policy**: any new mobile feature / fix goes into `packages/ios-native/`.
-The Capacitor wrapper at `packages/frontend/ios/` is preserved as fallback but
-unmaintained (see `packages/frontend/ios/DEPRECATED.md`).
-SwiftUI native is the confirmed long-term iOS frontend strategy. Do not migrate
-mobile work back to Capacitor/PWA or to React Native/Flutter unless the user
-explicitly reopens the architecture decision. Prefer server-driven config for
-copy, model lists, feature flags, profiles, and health-check display so routine
-changes do not require reinstalling the iOS app.
+SwiftUI native is the confirmed long-term iOS frontend strategy. The legacy
+Capacitor wrapper at `packages/frontend/ios/` was deleted 2026-05-20 as part
+of project-slim (see git history for the previous DEPRECATED state). Do not
+migrate mobile work back to Capacitor/PWA or to React Native/Flutter unless
+the user explicitly reopens the architecture decision. Prefer server-driven
+config for copy, model lists, feature flags, profiles, and health-check
+display so routine changes do not require reinstalling the iOS app.
 
 ## Backend
 

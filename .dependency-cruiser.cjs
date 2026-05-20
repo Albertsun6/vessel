@@ -26,7 +26,6 @@ module.exports = {
     exclude: {
       path: [
         "^packages/frontend/dist/",
-        "^packages/frontend/ios/App/App/public/",
       ],
     },
     tsConfig: {
