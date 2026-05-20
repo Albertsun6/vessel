@@ -1,6 +1,6 @@
 # Vessel Backlog
 
-**最近更新**: 2026-05-20T18:50:00Z
+**最近更新**: 2026-05-20T20:50:00Z
 **Steward 启动仪式**: 见 [`docs/STEWARD_PROMPTS.md`](STEWARD_PROMPTS.md) 或 [`docs/STEWARD_USAGE.md`](STEWARD_USAGE.md)
 **Schema 契约**: [`docs/adr/vessel/ADR-019-steward-v0-contract.md`](adr/vessel/ADR-019-steward-v0-contract.md)
 **Source-of-truth**: 本文件是唯一写入点（I1）；`status` 字段是状态唯一权威（I10）；section header 仅人眼导航
@@ -20,16 +20,6 @@ items:
     parallel_safe_files: ["docs/proposals/"]
     depends_on: []
     note: "调研 whisper-large > 500MB 走 worker subprocess (ADR-012)；写到 docs/proposals/M2-VOICE-CAPABILITY.md；可并行候选"
-
-  - id: project-slim-structure
-    title: 项目结构精简（deprecated Capacitor wrapper / iCloud 冲突副本 / 零散报告归档）
-    priority: P3
-    size: M
-    status: planned
-    assigned_kind: main
-    parallel_safe_files: ["packages/frontend/ios/", "packages/ios-native/", "docs/"]
-    depends_on: []
-    note: "候选：① 评估删 packages/frontend/ios/ Capacitor wrapper（已 DEPRECATED）② 删 iCloud 冲突副本 packages/ios-native/Vessel 2.xcodeproj/ ③ 归档根目录零散 .m4a/.html 语音报告。逐项确认非批量。背景：项目瘦身计划阶段 D（~/.claude/plans/happy-swinging-glade.md）"
 
   - id: harness-migration-duplicate-pim-item-id
     title: harness-store migration 起不来 — duplicate column 'pim_item_id'
@@ -106,6 +96,13 @@ items:
 
 ```yaml
 items:
+  - id: project-slim-structure
+    title: 项目结构精简（deprecated Capacitor wrapper / iCloud 冲突副本 / 零散报告归档）
+    status: done
+    completed_at: 2026-05-20T12:50:00Z
+    refs: ["pr:#119", "pr:#121", "pr:#122"]
+    note: "① Capacitor wrapper 删（PR #122：-1281 行 / -66 npm 包）② iCloud 冲突副本：.gitignore 早就 block 了，无需手动删 ③ 4 个 .m4a 删 + 4 个 .html 归档进 docs/research/（PR #121）+ 1 个 ~/.claude-web Eva 残留 + 3 个 launchd plist 一并清。chore/project-slim 分支"
+
   - id: intent-classifier-v1
     title: Intent Classifier v1 (M2-intent-v1)
     status: done
