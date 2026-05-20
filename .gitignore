@@ -40,3 +40,9 @@ vessel.xmind
 packages/ios-native/build_sim/
 packages/ios-native/.xcode.env
 DerivedData/
+
+# 本地语音/会议录音 — 个人工作流产物，不进仓库
+*.m4a
+
+# Claude Code 调度器本地 lock — 进程间互斥，运行时产物
+.claude/scheduled_tasks.lock
