@@ -133,8 +133,13 @@ struct ClaudeWebApp: App {
                         // .inactive is skipped because it fires for transient
                         // overlays (control center, alerts) and would churn.
                         client.enterBackground()
+                        // Same fix for heartbeat polling: a 5s HTTP poll on a
+                        // dead backend was the dominant cause of "phone heats
+                        // up while disconnected" — kill its timer too.
+                        Task { @MainActor in heartbeat.enterBackground() }
                     case .active:
                         client.enterForeground()
+                        Task { @MainActor in heartbeat.enterForeground() }
                     default:
                         break
                     }

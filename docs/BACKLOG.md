@@ -1,6 +1,6 @@
 # Vessel Backlog
 
-**最近更新**: 2026-05-19T22:30:00Z
+**最近更新**: 2026-05-20T18:50:00Z
 **Steward 启动仪式**: 见 [`docs/STEWARD_PROMPTS.md`](STEWARD_PROMPTS.md) 或 [`docs/STEWARD_USAGE.md`](STEWARD_USAGE.md)
 **Schema 契约**: [`docs/adr/vessel/ADR-019-steward-v0-contract.md`](adr/vessel/ADR-019-steward-v0-contract.md)
 **Source-of-truth**: 本文件是唯一写入点（I1）；`status` 字段是状态唯一权威（I10）；section header 仅人眼导航
@@ -30,6 +30,26 @@ items:
     parallel_safe_files: ["packages/frontend/ios/", "packages/ios-native/", "docs/"]
     depends_on: []
     note: "候选：① 评估删 packages/frontend/ios/ Capacitor wrapper（已 DEPRECATED）② 删 iCloud 冲突副本 packages/ios-native/Vessel 2.xcodeproj/ ③ 归档根目录零散 .m4a/.html 语音报告。逐项确认非批量。背景：项目瘦身计划阶段 D（~/.claude/plans/happy-swinging-glade.md）"
+
+  - id: harness-migration-duplicate-pim-item-id
+    title: harness-store migration 起不来 — duplicate column 'pim_item_id'
+    priority: P2
+    size: S
+    status: planned
+    assigned_kind: main
+    parallel_safe_files: ["packages/backend/src/migrations/", "packages/backend/src/harness-store.ts"]
+    depends_on: []
+    note: "stderr.log: `SqliteError: duplicate column name: pim_item_id` 来自 runPendingMigrations → harness routes 起不来（其它路由不受影响）。可能是 PIM Week 3 之后某个 migration 加列没用 IF NOT EXISTS / 或上一次 schema-rebuild 之后又加了同名列。修复：定位是哪个 NNNN_*.sql 加的 pim_item_id 列、看 schema_migrations 表已应用了哪个版本、决定是 ALTER 加 guard 还是开新 migration drop+recreate。2026-05-20 18:24 真机调试时发现，今天先记下不处理"
+
+  - id: ios-real-device-lan-access
+    title: iOS 真机走局域网访问 backend（绕开 Tailscale，需要 0.0.0.0 + token）
+    priority: P3
+    size: S
+    status: planned
+    assigned_kind: main
+    parallel_safe_files: ["~/Library/LaunchAgents/com.vessel.backend.plist", "packages/ios-native/Sources/ClaudeWeb/Settings*.swift"]
+    depends_on: []
+    note: "backend 代码内置硬约束：BACKEND_HOST=0.0.0.0 必须配 VESSEL_TOKEN（防同 WiFi 任意设备 spawn claude CLI）。要走 LAN 路径必须同步 plist 加 BACKEND_HOST + VESSEL_TOKEN + iOS Settings 加 Bearer token 字段。2026-05-20 尝试无 token 部署被 FATAL 检查拦截。短期回退到 127.0.0.1，留待规划真机使用方式（Tailscale vs LAN+token）后再做"
 
 ```
 

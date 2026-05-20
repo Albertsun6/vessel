@@ -45,6 +45,7 @@
 		7624AAE38FA404301A7D619A /* ClaudeWebApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 396677220A7D882DB940AB74 /* ClaudeWebApp.swift */; };
 		7CC74AE45C90AAAA9C7AF55F /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7761F193E381FE2895AF7F40 /* BuildInfo.swift */; };
 		816AE12725FFD91590455BB8 /* WorktreeFinalizeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95EB1C07DDCD24CB9C39877 /* WorktreeFinalizeSheet.swift */; };
+		825E15C78A90F92BF9DEA50D /* WorkflowChoiceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13B86E2214D3B774B521EB59 /* WorkflowChoiceSheet.swift */; };
 		842C7F1FE5E3702E7207EB2D /* fallback-config.json in Resources */ = {isa = PBXBuildFile; fileRef = 98ADC5FDEE0363CACDD58B20 /* fallback-config.json */; };
 		8628B33051CD86FA3B04DA52 /* HarnessProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCE66D2BC68C38AB36E167C5 /* HarnessProtocol.swift */; };
 		8C3AABC29741811E6C593442 /* MemoryAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A0E673CBB7B4E78AF2F5F2 /* MemoryAPI.swift */; };
@@ -107,6 +108,7 @@
 		0CAA94D3A2EA5E1964256325 /* TTSPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSPlayer.swift; sourceTree = "<group>"; };
 		12D633D2B9BA81ED44C7C43A /* PermissionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionSheet.swift; sourceTree = "<group>"; };
 		13576BFB51E2AD239AF68746 /* ChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatListView.swift; sourceTree = "<group>"; };
+		13B86E2214D3B774B521EB59 /* WorkflowChoiceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowChoiceSheet.swift; sourceTree = "<group>"; };
 		19C3258582129572401FEB6C /* InboxAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxAPI.swift; sourceTree = "<group>"; };
 		1A0E526876273C19E1ED8B83 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1DA6320584AF70F228A6540A /* ProtocolFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolFixtureTests.swift; sourceTree = "<group>"; };
@@ -225,6 +227,7 @@
 				12D633D2B9BA81ED44C7C43A /* PermissionSheet.swift */,
 				615A5C6CF9F1DCFB56036BED /* RecordingHUD.swift */,
 				70D86E69352B042BA20B55E3 /* RunsDashboardSheet.swift */,
+				13B86E2214D3B774B521EB59 /* WorkflowChoiceSheet.swift */,
 				C95EB1C07DDCD24CB9C39877 /* WorktreeFinalizeSheet.swift */,
 			);
 			path = Views;
@@ -589,6 +592,7 @@
 				02CD812D3F8FD2B778F795C7 /* VoiceRecorder.swift in Sources */,
 				F6E78233A4CBAC07BCE057E4 /* VoiceSession.swift in Sources */,
 				5F0170E10E31BCDA056395DC /* WebSocketClient.swift in Sources */,
+				825E15C78A90F92BF9DEA50D /* WorkflowChoiceSheet.swift in Sources */,
 				BF5A69BCBA855473B0A8A644 /* WorktreeAPI.swift in Sources */,
 				816AE12725FFD91590455BB8 /* WorktreeFinalizeSheet.swift in Sources */,
 			);
@@ -652,7 +656,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 66;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 23PRXWBRNH;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -819,7 +823,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 66;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 23PRXWBRNH;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
