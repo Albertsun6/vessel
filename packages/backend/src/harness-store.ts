@@ -126,13 +126,33 @@ function bootstrapMigrationsTable(db: Database.Database): void {
   `);
 }
 
+// Strict migration filename: NNNN_<lower_snake>.sql. The desc part is
+// [a-z0-9_]+ specifically so a SPACE cannot pass — iCloud generates conflict
+// copies like `0008_pim_item 2.sql` when ~/Desktop is iCloud-synced, and the
+// old `^\d{4}_.*\.sql$` let `.*` swallow the space → the bogus copy got
+// applied → schema_migrations / user_version drift → test:harness-schema
+// failed (backlog: pim-icloud-conflict-migration-pollution). Reject + WARN
+// (loud, not silent — silent skip is what made this take a whole session to
+// diagnose) so future conflict pollution is immediately visible in logs.
+const MIGRATION_FILE_RE = /^\d{4}_[a-z0-9_]+\.sql$/;
+
 function runPendingMigrations(
   db: Database.Database,
   migrationsDir: string,
   dbPath: string,
 ): void {
-  const files = readdirSync(migrationsDir)
-    .filter((f) => /^\d{4}_.*\.sql$/.test(f))
+  const all = readdirSync(migrationsDir);
+  for (const f of all) {
+    if (!MIGRATION_FILE_RE.test(f) && /^\d{4}_.*\.sql$/.test(f)) {
+      console.warn(
+        `[harness-store] ignoring migration-shaped file with illegal name ` +
+        `(likely an iCloud conflict copy): "${f}". Real migrations must match ` +
+        `${MIGRATION_FILE_RE}. Remove the conflict copy / move repo out of iCloud sync.`,
+      );
+    }
+  }
+  const files = all
+    .filter((f) => MIGRATION_FILE_RE.test(f))
     .sort();
 
   const applied = new Set(

@@ -86,6 +86,34 @@ describe("protocol fixtures — ClientMessage", () => {
       expect(msg.skill).toBe("echo");
     }
   });
+
+  it("client-reattach-run — ADR-023 reconnect reattach", () => {
+    const msg = loadFixture<ClientMessage>("client-reattach-run.json");
+    expect(msg.type).toBe("reattach_run");
+    if (msg.type === "reattach_run") {
+      expect(msg.runId).toBe("run-abc123");
+      expect(msg.conversationId).toBe("conv-abc123");
+      expect(msg.sessionId).toBe("sess-2026-05-20");
+      expect(msg.cwd).toBe("/Users/test/project");
+    }
+  });
+
+  it("client-user-prompt-reattach-capable — ADR-023 C6 capability", () => {
+    const msg = loadFixture<ClientMessage>("client-user-prompt-reattach-capable.json");
+    expect(msg.type).toBe("user_prompt");
+    if (msg.type === "user_prompt") {
+      expect(msg.clientCapabilities?.reattach).toBe(true);
+    }
+  });
+
+  it("client-permission-reply-deny-with-message — ADR-023 Phase C deny+instruct", () => {
+    const msg = loadFixture<ClientMessage>("client-permission-reply-deny-with-message.json");
+    expect(msg.type).toBe("permission_reply");
+    if (msg.type === "permission_reply") {
+      expect(msg.decision).toBe("deny");
+      expect(msg.message).toBe("不要 rm，改成移动到 .trash/");
+    }
+  });
 });
 
 describe("protocol fixtures — ServerMessage", () => {
@@ -293,6 +321,25 @@ describe("protocol fixtures — ServerMessage", () => {
       expect(msg.runId).toBe("run-vessel-abc123");
       expect(msg.vesselSessionId).toBe("sess-2026-05-11");
       expect(msg.result).toBeDefined();
+    }
+  });
+
+  it("server-run-status-running — ADR-023 C2 reattach answer + pending", () => {
+    const msg = loadFixture<ServerMessage>("server-run-status-running.json");
+    expect(msg.type).toBe("run_status");
+    if (msg.type === "run_status") {
+      expect(msg.status).toBe("running");
+      expect(msg.sessionId).toBe("sess-2026-05-20");
+      expect(msg.pending?.kind).toBe("permission");
+      expect(msg.pending?.toolName).toBe("Write");
+    }
+  });
+
+  it("server-run-status-unknown — ADR-023 C2 no-record fallback", () => {
+    const msg = loadFixture<ServerMessage>("server-run-status-unknown.json");
+    expect(msg.type).toBe("run_status");
+    if (msg.type === "run_status") {
+      expect(msg.status).toBe("unknown");
     }
   });
 });

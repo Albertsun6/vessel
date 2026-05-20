@@ -119,7 +119,7 @@ fi
 if [ "$ALLOW_PRIVATE_PATHS" -eq 0 ]; then
   PRIVATE_PATHS=$(grep -oE '/Users/[^/[:space:]]+/' "$PREFLIGHT_TMP" 2>/dev/null \
     | sort -u \
-    | grep -vE '/Users/yongqian/(Desktop/Vessel|Desktop/claude-web|\.claude|\.cursor)' \
+    | grep -vE '/Users/yongqian/(dev/Vessel|Desktop/Vessel|Desktop/claude-web|\.claude|\.cursor)' \
     || true)
   if [ -n "$PRIVATE_PATHS" ]; then
     echo "WARNING: detected user paths outside whitelist:" >&2

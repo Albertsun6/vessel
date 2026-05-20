@@ -1,6 +1,6 @@
 # Vessel Backlog
 
-**最近更新**: 2026-05-19T18:00:00Z
+**最近更新**: 2026-05-19T22:30:00Z
 **Steward 启动仪式**: 见 [`docs/STEWARD_PROMPTS.md`](STEWARD_PROMPTS.md) 或 [`docs/STEWARD_USAGE.md`](STEWARD_USAGE.md)
 **Schema 契约**: [`docs/adr/vessel/ADR-019-steward-v0-contract.md`](adr/vessel/ADR-019-steward-v0-contract.md)
 **Source-of-truth**: 本文件是唯一写入点（I1）；`status` 字段是状态唯一权威（I10）；section header 仅人眼导航
@@ -10,7 +10,27 @@
 ## Active (planned / in_progress)
 
 ```yaml
-items: []
+items:
+  - id: m2-voice-proposal
+    title: M2-Voice Capability 设计提案
+    priority: P2
+    size: M
+    status: planned
+    assigned_kind: main
+    parallel_safe_files: ["docs/proposals/"]
+    depends_on: []
+    note: "调研 whisper-large > 500MB 走 worker subprocess (ADR-012)；写到 docs/proposals/M2-VOICE-CAPABILITY.md；可并行候选"
+
+  - id: project-slim-structure
+    title: 项目结构精简（deprecated Capacitor wrapper / iCloud 冲突副本 / 零散报告归档）
+    priority: P3
+    size: M
+    status: planned
+    assigned_kind: main
+    parallel_safe_files: ["packages/frontend/ios/", "packages/ios-native/", "docs/"]
+    depends_on: []
+    note: "候选：① 评估删 packages/frontend/ios/ Capacitor wrapper（已 DEPRECATED）② 删 iCloud 冲突副本 packages/ios-native/Vessel 2.xcodeproj/ ③ 归档根目录零散 .m4a/.html 语音报告。逐项确认非批量。背景：项目瘦身计划阶段 D（~/.claude/plans/happy-swinging-glade.md）"
+
 ```
 
 ---
@@ -66,13 +86,6 @@ items:
 
 ```yaml
 items:
-  - id: m2-voice-proposal
-    title: M2-Voice Capability 设计提案 + 统一 ASR provider 链实现
-    status: done
-    completed_at: 2026-05-19T09:00:00Z
-    refs: ["pr:#91", "pr:#92", "commit:dc265de", "proposal:docs/proposals/M2-VOICE-CAPABILITY.md"]
-    note: "超出原 scope：不止写提案，还实现并 ship 了统一 ASR 抽象（packages/backend/src/asr/，groq→iflytek→whisper-cpp 自动降级链）。三家实测对比：Groq whisper-large-v3 ~0.8s 最准选主力；讯飞全产品线不适配短语音低延迟（IAT ~8s 流式 / 极速 ~20s 官方文档）留 IAT 兜底；本地 whisper 最后兜底。PR #91 实现 + PR #92 提案文档均合入 main。.env 已配 Groq+讯飞 key（gitignore 保护）"
-
   - id: intent-classifier-v1
     title: Intent Classifier v1 (M2-intent-v1)
     status: done
@@ -176,12 +189,19 @@ items:
     refs: ["commit:9b6d091"]
     note: "粗略跑 IOS_NATIVE_DEVICE_TEST.md §6.6 / §6.7 / §8.1-8.3 + cache 回退，整体可用，无 follow-up bug 入 backlog"
 
-  - id: aisep-split-from-vessel
-    title: AISEP 拆出独立 repo vessel-aisep (先拆后合策略)
+  - id: aisep-v2-implement
+    title: AISEP v2 fan-in 实施 (aisep-protocol@0.4.0 + schema + scheduler + runner + cli + report + migrate util)
     status: done
-    completed_at: 2026-05-15T00:00:00Z
-    refs: ["adr:024", "repo:github.com/Albertsun6/vessel-aisep"]
-    note: "git filter-repo 保留 48 commits + aisep-protocol@0.3.0 tag。vessel 主线删 6 个包 + 30 份 doc/review/proposal + ADR-022 + 主线引用。长期归宿：等 vessel 基本完善后作为 Capability 装回 VesselCore。AISEP backlog 后续在 vessel-aisep 自管。"
+    completed_at: 2026-05-14T06:45:02Z
+    refs: ["pr:#78", "pr:#79", "adr:022", "retro:docs/aisep/retrospectives/pilot-12-fan-in-2026-05-14.md"]
+    note: "ADR-022 Decisions 1-5 + Q1b/Q3/Q4/Q6 全部落地。7 个 slice commits squash-merged via PR #78 (37a9aa1)；dep-cruiser hygiene PR #79 (2c133fa) unblock gate 6。Pilot-12 dogfood 9/9 ship gates PASS (gate 8 binary-level 在 v0.3 worktree 验证：v0.3 schema 拒绝 v0.4 fixture，Unrecognized key(s) 'affects', 'migratedFromV03')。Monorepo 366 → 478 tests。"
+
+  - id: aisep-bootstrap-v0-v1
+    title: AISEP bootstrap — v0 线性 10 阶段链路 + v1 静态 fan-out + Option E HTML 报告
+    status: done
+    completed_at: 2026-05-13T08:53:00Z
+    refs: ["pr:#68", "tag:aisep-bootstrap-merged-2026-05-13", "commit:b31e341"]
+    note: "43 commits 合入 dev：6 个 @vessel/aisep-* TypeScript 包 (protocol/core/workspace/agents/memory/cli) + aisep-protocol@0.3.0 wire format + Pilot-10b 10/10 真业务 dogfood + 334 tests 0 dep-cruiser violations + F1/F2/F6 (claude --print timeout + burst-limit retry)。Phase 2.F 残留 F3/F4/F5 (timeout retry / incremental render hint / cli --help smoke test) 单独 backlog；v2 fan-in proposal target 2026-06。rebase 期间统一 namespace @claude-web/aisep-* → @vessel/aisep-* 跟 PR #39 Vessel kernel 对齐。"
 
   - id: steward-v06-contract-debt
     title: Steward V0.6 契约债 — mirror + validate + status 三件套

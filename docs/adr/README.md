@@ -39,13 +39,14 @@
 | **019** | [Steward V0 Contract](vessel/ADR-019-steward-v0-contract.md)（BACKLOG.md + 10-prompt UI + boot ritual） | 1 | ✅ Accepted | ADR-014 | 0-meta-lite+ |
 | **020** | [PIM 统一捕获入口](vessel/ADR-020-pim-capture-entry.md)（v2.1 个人 PIM 试点 backend 模块） | 1 | ✅ Accepted（Week 1 验收 2026-05-14 通过；212 tests + iOS xcodebuild SUCCEEDED） | ADR-000 / ADR-006 / ADR-008 / ADR-013 / ADR-018 | M0-PIM |
 | **022** | ~~AISEP v2 Fan-In~~（已随 AISEP 拆出，单驻留 [vessel-aisep](https://github.com/Albertsun6/vessel-aisep) repo） | — | 🔀 Moved to vessel-aisep | ADR-018 / ADR-014 | aisep v0.4 |
+| **023** | [iOS 断线 Run 存活与重挂 Wire 契约](vessel/ADR-023-ios-disconnect-reattach-contract.md)（reattach_run + run_status + 状态机 + sink rebind + permission lifecycle） | 2/4/5 | ✅ Accepted（contract phase1+2+3 收敛 2026-05-19） | ADR-000 / ADR-013 | iOS-disconnect |
 | **024** | [AISEP 拆出独立 repo](vessel/ADR-024-aisep-external-repo-during-vessel-development.md)（先拆后合策略） | 1 | ✅ Accepted | ADR-018 (supersedes) / ADR-022 (related) | aisep 全程 |
 
 > ADR-021 编号当前空闲，预留给 ADR-019 Steward 契约后续修订（参 ADR-019 §"改 schema 字段含义...需 ADR-020+"）。本表 020 已被 PIM 占用；下次 Steward 契约修订用 021。
-> ADR-023 编号当前空闲，留作后续使用。
+> ADR-023 已占用（iOS 断线 reattach 契约，2026-05-19）。
 
 **Tier 划分**（按 v5.4 dogfood M-P2 partial）：
-- **Tier 1**（15 份）：重大决策 + Phase 0 调研（如适用）
+- **Tier 1**（11 份）：重大决策 + Phase 0 调研（如适用）
 - **Tier 2**（7 份）：1-2 段简短决策 / 决策已明确 / 无需 Phase 0
 
 ---

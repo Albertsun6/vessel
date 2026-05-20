@@ -1,0 +1,9 @@
+{
+  "type": "user_prompt",
+  "runId": "run-cap001",
+  "prompt": "帮我重构这个模块",
+  "cwd": "/Users/test/project",
+  "model": "claude-sonnet-4-6",
+  "permissionMode": "default",
+  "clientCapabilities": { "reattach": true }
+}

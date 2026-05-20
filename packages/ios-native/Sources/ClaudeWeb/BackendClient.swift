@@ -31,7 +31,15 @@ final class BackendClient {
     // Handles both watchdog (kill runs >8 min) and periodic cache flush.
     private var watchdogTimer: Timer?
 
+    /// ADR-023 Phase C: a paused Vessel workflow awaiting a HITL choice.
+    /// Workflow is a workflowId-keyed broadcast subsystem (NOT runId-bound),
+    /// so this is intentionally global, not per-conversation. Answered via
+    /// `resumeWorkflow` → POST /api/vessel/workflows/:id/resume.
+    var pendingWorkflowChoice: WorkflowChoice?
+    private let authTokenProvider: () -> String
+
     init(backendBase: URL, authToken: @escaping () -> String = { "" }) {
+        self.authTokenProvider = authToken
         let ws = WebSocketClient(backendBase: backendBase, authToken: authToken)
         self.webSocket = ws
         self.store = ConversationStore()
@@ -326,7 +334,10 @@ final class BackendClient {
             model: model,
             permissionMode: permissionMode,
             resumeSessionId: started.resumeSessionId,
-            attachments: attachments
+            attachments: attachments,
+            // ADR-023 C6: declare reattach capability so backend may keep this
+            // run alive across disconnect (gated also by VESSEL_RUN_SURVIVES_DISCONNECT).
+            reattachCapable: true
         )
         telemetry?.log(
             "prompt.send",
@@ -402,9 +413,14 @@ final class BackendClient {
         if webSocket.isOpen {
             Task { [weak self] in try? await self?.webSocket.send(.interrupt(runId: runId)) }
         } else {
-            // WS down → backend already aborted the process when the connection
-            // closed. Clear local state immediately so the UI unblocks.
-            forceClearRun(convId: convId, runId: runId)
+            // ADR-023 I-8: with survive-disconnect the backend did NOT abort on
+            // ws_close. Don't fake-clear (that diverges UI from a still-running
+            // run). Queue the Stop; clearStuckRunsAfterReconnect sends a real
+            // interrupt(runId) on reconnect. The 8-min watchdog is the backstop
+            // if reconnect never happens.
+            pendingInterruptRunIds.insert(runId)
+            telemetry?.log("interrupt.queued_ws_down",
+                           props: ["runId": runId], conversationId: convId)
         }
     }
 
@@ -415,21 +431,49 @@ final class BackendClient {
         if webSocket.isOpen {
             Task { [weak self] in try? await self?.webSocket.send(.interrupt(runId: runId)) }
         } else {
-            forceClearRun(convId: convId, runId: runId)
+            // ADR-023 I-8: queue real Stop for reconnect (see interrupt()).
+            pendingInterruptRunIds.insert(runId)
+            telemetry?.log("interrupt.queued_ws_down",
+                           props: ["runId": runId], conversationId: convId)
         }
     }
 
-    func replyPermission(_ request: PermissionRequest, decision: PermissionDecision) {
+    /// `message` (ADR-023 Phase C): only meaningful with `.deny` — forwarded
+    /// to Claude as the deny reason so the user can redirect ("do X instead").
+    func replyPermission(_ request: PermissionRequest, decision: PermissionDecision, message: String? = nil) {
         Task { [weak self] in
             try? await self?.webSocket.send(.permissionReply(
                 requestId: request.requestId,
                 decision: decision.rawValue,
                 runId: request.runId,
-                toolName: request.toolName
+                toolName: request.toolName,
+                message: (decision == .deny) ? message : nil
             ))
         }
         if let convId = router.resolve(runId: request.runId) {
             store.clearPendingPermission(convId: convId, requestId: request.requestId)
+        }
+    }
+
+    /// ADR-023 Phase C: answer a paused workflow's HITL choice.
+    /// POST /api/vessel/workflows/:id/resume { option } (no wire lock —
+    /// workflows survive disconnect server-side; this is pure additive UI).
+    func resumeWorkflow(_ choice: WorkflowChoice, option: String) {
+        pendingWorkflowChoice = nil
+        let base = backendBase
+        let token = authTokenProvider()
+        telemetry?.log("workflow.resume",
+                       props: ["workflowId": choice.workflowId, "option": option])
+        Task {
+            var req = URLRequest(url: base
+                .appendingPathComponent("api/vessel/workflows")
+                .appendingPathComponent(choice.workflowId)
+                .appendingPathComponent("resume"))
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "content-type")
+            if !token.isEmpty { req.setValue("Bearer \(token)", forHTTPHeaderField: "authorization") }
+            req.httpBody = try? JSONSerialization.data(withJSONObject: ["option": option])
+            _ = try? await URLSession.shared.data(for: req)
         }
     }
 
@@ -461,6 +505,17 @@ final class BackendClient {
             if kind == "config_changed" {
                 onHarnessConfigChanged?()
             }
+            return
+        }
+
+        // ADR-023 Phase C: vessel_workflow_paused is a workflowId-keyed
+        // broadcast (no runId) — surface it globally for the choice sheet.
+        if case .workflowPaused(let workflowId, let step, let message, let options) = msg {
+            telemetry?.log("workflow.paused",
+                           props: ["workflowId": workflowId, "step": String(step),
+                                   "options": options.joined(separator: ",")])
+            pendingWorkflowChoice = WorkflowChoice(
+                workflowId: workflowId, step: step, message: message, options: options)
             return
         }
 
@@ -518,6 +573,10 @@ final class BackendClient {
             router.release(runId: runId)
         case .clearRunMessages:
             store.handleClearRunMessages(convId: convId, runId: runId)
+        case .runStatus(_, let status, let endedReason, let sessionId, let pendingPermission):
+            handleRunStatus(convId: convId, runId: runId, status: status,
+                            endedReason: endedReason, sessionId: sessionId,
+                            pending: pendingPermission)
         case .permissionRequest(_, let requestId, let toolName, let input):
             // Auto-allow if user opted in for this run+tool
             if store.isToolAllowedForRun(runId, toolName) {
@@ -526,7 +585,8 @@ final class BackendClient {
                         requestId: requestId,
                         decision: "allow",
                         runId: runId,
-                        toolName: toolName
+                        toolName: toolName,
+                        message: nil
                     ))
                 }
                 telemetry?.log(
@@ -552,6 +612,9 @@ final class BackendClient {
             // Already handled before runId routing — early-return means switch
             // never reaches this case in practice.
             return
+        case .workflowPaused:
+            // Already handled before runId routing (workflowId-keyed, no runId).
+            return
         case .unknown:
             return
         }
@@ -559,17 +622,86 @@ final class BackendClient {
 
     // MARK: - Stuck-run recovery
 
-    /// Synthesise a sessionEnded(interrupted) for every busy conversation on
-    /// WS reconnect. The backend kills all CLI processes when the connection
-    /// drops, so they will never send session_ended on the new connection.
+    /// ADR-023 S7: runIds the user pressed Stop on while the WS was down.
+    /// On reconnect we send a real `interrupt(runId)` (I-8: user Stop must
+    /// really stop) instead of only clearing local state.
+    private var pendingInterruptRunIds: Set<String> = []
+
+    /// ADR-023 C1/S7: on reconnect, REATTACH each still-busy conversation
+    /// instead of unconditionally force-clearing it. The backend (gated by
+    /// VESSEL_RUN_SURVIVES_DISCONNECT + our clientCapabilities.reattach) kept
+    /// the run alive; `run_status` tells us running / completed / unknown /…
+    /// Falls back to force-clear only when reattach can't be attempted.
     private func clearStuckRunsAfterReconnect() {
         let stuck = store.stateByConversation.filter { $0.value.busy }
         guard !stuck.isEmpty else { return }
-        telemetry?.warn("stuck_run.reconnect_clearing", props: ["count": String(stuck.count)])
+        telemetry?.log("reattach.attempting", props: ["count": String(stuck.count)])
         for (convId, state) in stuck {
             guard let runId = state.currentRunId else { continue }
+            // Stop pressed while offline → real abort now (not a local clear).
+            if pendingInterruptRunIds.contains(runId) {
+                Task { [weak self] in try? await self?.webSocket.send(.interrupt(runId: runId)) }
+                telemetry?.log("reattach.pending_interrupt_sent",
+                               props: ["runId": runId], conversationId: convId)
+                continue
+            }
+            guard let conv = store.conversations[convId] else {
+                forceClearRun(convId: convId, runId: runId)
+                continue
+            }
+            Task { [weak self] in
+                try? await self?.webSocket.send(.reattachRun(
+                    runId: runId,
+                    conversationId: convId,
+                    sessionId: conv.sessionId,
+                    cwd: conv.cwd
+                ))
+            }
+        }
+        pendingInterruptRunIds.removeAll()
+    }
+
+    /// ADR-023 C2/S7: act on the backend's reattach answer.
+    private func handleRunStatus(convId: String, runId: String, status: RunStatus,
+                                 endedReason: String?, sessionId: String?,
+                                 pending: (requestId: String, toolName: String, input: [String: Any])?) {
+        telemetry?.log("reattach.status",
+                        props: ["status": status.rawValue, "runId": runId],
+                        conversationId: convId)
+        switch status {
+        case .running, .interrupting:
+            // Run survived — keep busy; sdk_message / session_ended now flow on
+            // this connection. Re-surface a pending permission if any (A2/C).
+            if let s = sessionId {
+                store.handleSystemInit(convId: convId, runId: runId, sessionId: s)
+            }
+            if let p = pending {
+                store.handlePermissionRequest(convId: convId, runId: runId,
+                                              requestId: p.requestId,
+                                              toolName: p.toolName, input: p.input)
+            }
+        case .completed:
+            _ = store.handleSessionEnded(convId: convId, runId: runId, reason: "completed")
+            router.release(runId: runId)
+            forgetRunAllowlist(runId)
+            if let cwd = store.conversations[convId]?.cwd { onTurnCompleted?(convId, cwd) }
+            fireNextQueued(convId: convId)
+        case .failed, .aborted:
+            _ = store.handleSessionEnded(convId: convId, runId: runId,
+                                         reason: endedReason ?? (status == .failed ? "error" : "interrupted"))
+            router.release(runId: runId)
+            forgetRunAllowlist(runId)
+        case .expired:
+            _ = store.handleSessionEnded(convId: convId, runId: runId, reason: "interrupted")
+            router.release(runId: runId)
+            forgetRunAllowlist(runId)
+            store.appendError(toConversation: convId, "运行已过期回收（断线超时未重连）")
+            onConversationDirty?(convId)
+        case .unknown:
+            // Backend has no record (restarted / GC'd) → fall back (I-7).
             forceClearRun(convId: convId, runId: runId)
         }
+        onConversationDirty?(convId)
     }
 
     /// Clear a single stuck run and persist the change.

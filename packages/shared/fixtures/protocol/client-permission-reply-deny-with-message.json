@@ -1,0 +1,8 @@
+{
+  "type": "permission_reply",
+  "requestId": "req-perm-002",
+  "decision": "deny",
+  "runId": "run-abc123",
+  "toolName": "Bash",
+  "message": "不要 rm，改成移动到 .trash/"
+}

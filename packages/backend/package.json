@@ -34,6 +34,7 @@
     "test:pim-list-export": "tsx src/test-pim-list-export.ts",
     "migrate:inbox-to-pim": "tsx scripts/migrate-inbox-to-pim.ts",
     "test:workflow": "tsx src/test-workflow.ts",
+    "test:adr023": "tsx src/test-adr023-reattach.ts",
     "test:m1bplus": "tsx src/test-m1bplus.ts",
     "test:soul": "tsx src/test-soul.ts",
     "test:m2-ios-alpha": "tsx src/test-m2-ios-alpha.ts",

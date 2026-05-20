@@ -130,3 +130,13 @@ console.log(
     "37",
   ),
 );
+
+// --exit-code: non-breaking opt-in for vessel-stop-hook.sh / `/loop` noise control.
+// Behaviour above is unchanged; only the exit code differs when --exit-code is set:
+//   exit 10  → ≥1 non-malformed pending flag (caller should surface a collect-notify)
+//   exit 0   → no actionable pending flag (caller stays silent)
+// (zero-flags branch at line ~89 already exits 0, which is correct for --exit-code.)
+if (args.includes("--exit-code")) {
+  const pending = flags.filter((f) => !f._error).length;
+  process.exit(pending > 0 ? 10 : 0);
+}
